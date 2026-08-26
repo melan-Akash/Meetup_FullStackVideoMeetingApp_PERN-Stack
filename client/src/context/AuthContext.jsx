@@ -7,35 +7,37 @@ export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [isLoaded, setIsLoaded] = useState(false);
 
+  // Initialize auth state and check JWT token validation
   useEffect(() => {
+    const token = localStorage.getItem('meetup_token');
     const storedUser = localStorage.getItem('meeting_guest');
-    if (storedUser) {
+
+    if (token) {
+      // Validate token with backend /api/auth/me
+      api.get('/auth/me')
+        .then((res) => {
+          if (res.data) {
+            setUser(res.data);
+            localStorage.setItem('meeting_guest', JSON.stringify(res.data));
+          }
+        })
+        .catch(() => {
+          // If token expired or invalid, fallback to stored user or clear
+          if (storedUser) {
+            try {
+              setUser(JSON.parse(storedUser));
+            } catch (e) {}
+          }
+        })
+        .finally(() => setIsLoaded(true));
+    } else if (storedUser) {
       try {
         const parsed = JSON.parse(storedUser);
         setUser(parsed);
-        // Sync latest profile from backend database
-        api.post('/auth/login', {
-          id: parsed.id,
-          fullName: parsed.fullName || parsed.fullname || 'Great Stack',
-          email: parsed.email || 'user.greatstack@gmail.com'
-        }).then(res => {
-          if (res.data) {
-            const synced = {
-              ...parsed,
-              ...res.data,
-              fullName: res.data.fullname || parsed.fullName
-            };
-            setUser(synced);
-            localStorage.setItem('meeting_guest', JSON.stringify(synced));
-          }
-        }).catch(err => {
-          console.warn("Backend auth sync offline, using cached credentials:", err.message);
-        });
-      } catch (e) {
-        console.error("Error parsing stored user:", e);
-      }
+      } catch (e) {}
+      setIsLoaded(true);
     } else {
-      // Default Great Stack user profile
+      // Default Great Stack fallback
       const defaultUser = {
         id: "user_mock_001",
         fullName: "Great Stack",
@@ -45,84 +47,55 @@ export const AuthProvider = ({ children }) => {
       };
       setUser(defaultUser);
       localStorage.setItem('meeting_guest', JSON.stringify(defaultUser));
-      
-      api.post('/auth/login', {
-        id: defaultUser.id,
-        fullName: defaultUser.fullName,
-        email: defaultUser.email
-      }).catch(() => {});
+      setIsLoaded(true);
     }
-    setIsLoaded(true);
   }, []);
 
-  // 1. Register new user
-  const register = async (fullName, email, nickname) => {
-    const userId = `user_${Date.now()}`;
-    const userEmail = email.trim();
+  // 1. Register with Password & JWT
+  const register = async (fullName, email, password, nickname) => {
     const displayName = (fullName || nickname || 'User').trim();
-
-    let profile = {
-      id: userId,
-      fullName: displayName,
-      email: userEmail,
-      plan: "Free"
-    };
+    const userEmail = email.trim().toLowerCase();
 
     try {
-      const res = await api.post('/auth/login', {
-        id: userId,
+      const res = await api.post('/auth/register', {
         fullName: displayName,
-        email: userEmail
+        email: userEmail,
+        password: password,
+        nickname: nickname || displayName
       });
-      if (res.data) {
-        profile = {
-          ...profile,
-          ...res.data,
-          fullName: res.data.fullname || displayName
-        };
+
+      if (res.data && res.data.token) {
+        localStorage.setItem('meetup_token', res.data.token);
+        localStorage.setItem('meeting_guest', JSON.stringify(res.data.user));
+        setUser(res.data.user);
+        return res.data.user;
       }
     } catch (err) {
-      console.warn("Backend registration offline, saving locally:", err.message);
+      const errorMsg = err.response?.data?.error || err.message;
+      throw new Error(errorMsg);
     }
-
-    localStorage.setItem('meeting_guest', JSON.stringify(profile));
-    setUser(profile);
-    return profile;
   };
 
-  // 2. Login with existing email/name
-  const loginWithEmail = async (email, nameHint) => {
-    const cleanEmail = email.trim();
-    const displayName = nameHint || cleanEmail.split('@')[0];
-    const userId = `user_${cleanEmail.replace(/[^a-zA-Z0-9]/g, '_')}`;
-
-    let profile = {
-      id: userId,
-      fullName: displayName,
-      email: cleanEmail,
-      plan: "Free"
-    };
+  // 2. Login with Email & Password
+  const loginWithEmail = async (email, password) => {
+    const userEmail = email.trim().toLowerCase();
 
     try {
       const res = await api.post('/auth/login', {
-        id: userId,
-        fullName: displayName,
-        email: cleanEmail
+        email: userEmail,
+        password: password
       });
-      if (res.data) {
-        profile = {
-          ...profile,
-          ...res.data,
-          fullName: res.data.fullname || displayName
-        };
+
+      if (res.data && res.data.token) {
+        localStorage.setItem('meetup_token', res.data.token);
+        localStorage.setItem('meeting_guest', JSON.stringify(res.data.user));
+        setUser(res.data.user);
+        return res.data.user;
       }
     } catch (err) {
-      console.warn("Backend login offline, using local state:", err.message);
+      const errorMsg = err.response?.data?.error || "Invalid email or password";
+      throw new Error(errorMsg);
     }
-
-    localStorage.setItem('meeting_guest', JSON.stringify(profile));
-    setUser(profile);
-    return profile;
   };
 
   // 3. Fast Guest Login (Nickname only)
@@ -144,6 +117,9 @@ export const AuthProvider = ({ children }) => {
         email: guestEmail
       });
       if (res.data) {
+        if (res.data.token) {
+          localStorage.setItem('meetup_token', res.data.token);
+        }
         profile = {
           ...profile,
           ...res.data,
@@ -159,11 +135,14 @@ export const AuthProvider = ({ children }) => {
     return profile;
   };
 
+  // Logout
   const logout = () => {
+    localStorage.removeItem('meetup_token');
     localStorage.removeItem('meeting_guest');
     setUser(null);
   };
 
+  // Upgrade Plan
   const updatePlan = async (planName) => {
     if (!user) return;
     const updated = { ...user, plan: planName };

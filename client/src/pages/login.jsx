@@ -1,21 +1,31 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMockAuth } from '../context/AuthContext';
-import { ArrowRight, ArrowLeft, User, Mail, Sparkles, LogIn, CheckCircle2 } from 'lucide-react';
+import { 
+  ArrowRight, ArrowLeft, User, Mail, Lock, 
+  Eye, EyeOff, Sparkles, LogIn, CheckCircle2 
+} from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
 export default function Login() {
   // 'login' | 'register'
   const [viewMode, setViewMode] = useState('login');
   
-  // Registration steps: 1 = Basic Info, 2 = Set Nickname
+  // Registration steps: 1 = Basic Info & Password, 2 = Set Nickname
   const [regStep, setRegStep] = useState(1);
 
   // Form states
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [nickname, setNickname] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+
+  // Login form states
   const [loginEmail, setLoginEmail] = useState('');
+  const [loginPassword, setLoginPassword] = useState('');
+  const [showLoginPassword, setShowLoginPassword] = useState(false);
+
   const [isLoading, setIsLoading] = useState(false);
 
   const { register, loginWithEmail } = useMockAuth();
@@ -28,13 +38,18 @@ export default function Login() {
       toast.error("Please enter your email address");
       return;
     }
+    if (!loginPassword) {
+      toast.error("Please enter your password");
+      return;
+    }
+
     setIsLoading(true);
     try {
-      const userProfile = await loginWithEmail(loginEmail.trim());
+      const userProfile = await loginWithEmail(loginEmail.trim(), loginPassword);
       toast.success(`Welcome back, ${userProfile.fullName || 'User'}!`);
       navigate('/dashboard');
     } catch (err) {
-      toast.error("Login failed. Please check your credentials.");
+      toast.error(err.message || "Invalid email or password");
     } finally {
       setIsLoading(false);
     }
@@ -47,27 +62,33 @@ export default function Login() {
       toast.error("Please provide both your full name and email");
       return;
     }
-    // Pre-populate nickname with first name / full name
+    if (!password || password.length < 6) {
+      toast.error("Password must be at least 6 characters long");
+      return;
+    }
+
+    // Pre-populate nickname with full name
     if (!nickname.trim()) {
       setNickname(fullName.trim());
     }
     setRegStep(2);
   };
 
-  // Step 2: Complete Registration with Nickname
+  // Step 2: Complete Registration with Nickname & Password
   const handleRegStep2 = async (e) => {
     e.preventDefault();
     if (!nickname.trim()) {
       toast.error("Please choose a nickname for your video meetings");
       return;
     }
+
     setIsLoading(true);
     try {
-      await register(fullName.trim(), email.trim(), nickname.trim());
+      await register(fullName.trim(), email.trim(), password, nickname.trim());
       toast.success(`Registration complete! Welcome, ${nickname.trim()}!`);
       navigate('/dashboard');
     } catch (err) {
-      toast.error("Registration failed. Please try again.");
+      toast.error(err.message || "Registration failed. Please try again.");
     } finally {
       setIsLoading(false);
     }
@@ -92,7 +113,7 @@ export default function Login() {
             </h2>
             <p className="text-xs text-slate-500 mt-1 max-w-xs leading-relaxed">
               {viewMode === 'login' && "Sign in to access your meetings, history logs, and dashboard."}
-              {viewMode === 'register' && regStep === 1 && "Register to start hosting HD meetings and invite peers."}
+              {viewMode === 'register' && regStep === 1 && "Create a secure account with your email and password."}
               {viewMode === 'register' && regStep === 2 && "Choose how your name will appear to others in video calls."}
             </p>
           </div>
@@ -101,6 +122,8 @@ export default function Login() {
         {/* ----------------- 1. LOGIN VIEW ----------------- */}
         {viewMode === 'login' && (
           <form onSubmit={handleLoginSubmit} className="space-y-4">
+            
+            {/* Email Input */}
             <div className="space-y-1.5">
               <label className="block text-[11px] font-semibold uppercase tracking-wider text-slate-600">
                 Email Address
@@ -120,6 +143,34 @@ export default function Login() {
               </div>
             </div>
 
+            {/* Password Input */}
+            <div className="space-y-1.5">
+              <label className="block text-[11px] font-semibold uppercase tracking-wider text-slate-600">
+                Password
+              </label>
+              <div className="relative">
+                <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center text-slate-400 pointer-events-none">
+                  <Lock className="w-4 h-4" />
+                </span>
+                <input
+                  type={showLoginPassword ? "text" : "password"}
+                  value={loginPassword}
+                  onChange={(e) => setLoginPassword(e.target.value)}
+                  placeholder="••••••••"
+                  className="w-full pl-10 pr-10 py-3 glass-input rounded-2xl text-xs font-medium text-slate-900 placeholder-slate-400 outline-none focus:ring-2 focus:ring-blue-500/25 transition-all"
+                  required
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowLoginPassword(!showLoginPassword)}
+                  className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-400 hover:text-slate-700 cursor-pointer"
+                >
+                  {showLoginPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+            </div>
+
+            {/* Submit Button */}
             <button
               type="submit"
               disabled={isLoading}
@@ -149,9 +200,11 @@ export default function Login() {
           </form>
         )}
 
-        {/* ----------------- 2. REGISTER VIEW (STEP 1) ----------------- */}
+        {/* ----------------- 2. REGISTER VIEW (STEP 1: DETAILS & PASSWORD) ----------------- */}
         {viewMode === 'register' && regStep === 1 && (
-          <form onSubmit={handleRegStep1} className="space-y-4">
+          <form onSubmit={handleRegStep1} className="space-y-3.5">
+            
+            {/* Full Name */}
             <div className="space-y-1.5">
               <label className="block text-[11px] font-semibold uppercase tracking-wider text-slate-600">
                 Full Name
@@ -171,6 +224,7 @@ export default function Login() {
               </div>
             </div>
 
+            {/* Email Address */}
             <div className="space-y-1.5">
               <label className="block text-[11px] font-semibold uppercase tracking-wider text-slate-600">
                 Email Address
@@ -187,6 +241,34 @@ export default function Login() {
                   className="w-full pl-10 pr-4 py-3 glass-input rounded-2xl text-xs font-medium text-slate-900 placeholder-slate-400 outline-none focus:ring-2 focus:ring-blue-500/25 transition-all"
                   required
                 />
+              </div>
+            </div>
+
+            {/* Password */}
+            <div className="space-y-1.5">
+              <label className="block text-[11px] font-semibold uppercase tracking-wider text-slate-600">
+                Password <span className="text-[10px] text-slate-400 font-normal">(Min 6 chars)</span>
+              </label>
+              <div className="relative">
+                <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center text-slate-400 pointer-events-none">
+                  <Lock className="w-4 h-4" />
+                </span>
+                <input
+                  type={showPassword ? "text" : "password"}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="••••••••"
+                  minLength={6}
+                  className="w-full pl-10 pr-10 py-3 glass-input rounded-2xl text-xs font-medium text-slate-900 placeholder-slate-400 outline-none focus:ring-2 focus:ring-blue-500/25 transition-all"
+                  required
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-400 hover:text-slate-700 cursor-pointer"
+                >
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
               </div>
             </div>
 
@@ -225,7 +307,7 @@ export default function Login() {
                   Meeting Nickname
                 </label>
                 <span className="text-[10px] text-emerald-600 font-medium flex items-center gap-1">
-                  <CheckCircle2 className="w-3 h-3" /> Account Ready
+                  <CheckCircle2 className="w-3 h-3" /> Password Secured
                 </span>
               </div>
               <div className="relative">
@@ -254,7 +336,7 @@ export default function Login() {
               disabled={isLoading}
               className="w-full py-3.5 px-5 bg-[#0055ff] hover:bg-blue-700 disabled:bg-blue-400 text-white font-semibold text-xs sm:text-sm rounded-2xl shadow-md shadow-blue-500/25 flex items-center justify-center gap-2 transition-all cursor-pointer group"
             >
-              <span>{isLoading ? "Saving Profile..." : "Complete Registration & Enter App"}</span>
+              <span>{isLoading ? "Creating Account..." : "Complete Registration & Enter App"}</span>
               <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
             </button>
 
@@ -274,7 +356,7 @@ export default function Login() {
 
         {/* Footer Note */}
         <p className="text-center text-[11px] text-slate-500 font-medium pt-1">
-          Protected with end-to-end WebRTC encryption.
+          Protected with end-to-end WebRTC & JWT encryption.
         </p>
 
       </div>
