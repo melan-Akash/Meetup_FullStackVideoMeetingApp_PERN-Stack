@@ -40,7 +40,7 @@ export default function VideoTile({ username, stream, isLocal, audioEnabled, vid
               <img src={avatarUrl} alt={username} className="w-full h-full object-cover" />
             </div>
           ) : (
-            <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center text-white text-3xl font-extrabold shadow-md ring-4 ring-white/80">
+            <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-full bg-linear-to-tr from-blue-600 to-indigo-500 flex items-center justify-center text-white text-3xl font-extrabold shadow-md ring-4 ring-white/80">
               {getInitials(username)}
             </div>
           )}
@@ -56,7 +56,7 @@ export default function VideoTile({ username, stream, isLocal, audioEnabled, vid
 
       {/* Bottom Name & Audio Status Tag */}
       <div className="absolute bottom-3.5 left-3.5 flex items-center gap-1.5 bg-slate-900/80 backdrop-blur-md px-3 py-1.5 rounded-full text-white text-xs font-medium shadow-xs">
-        <span className="truncate max-w-[160px]">
+        <span className="truncate max-w-40">
           {username}
         </span>
         {audioEnabled ? (
