@@ -1,70 +1,72 @@
 import { useState, useEffect, useCallback } from 'react';
-import { toast } from 'react-hot-toast';
+import { socket } from '../config/socket';
 
 export const useChat = (roomID, user) => {
   const [messages, setMessages] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [isChatOpen, setIsChatOpen] = useState(false);
 
-  // Backend එක සම්බන්ධ කිරීමට පෙර, වැඩ කරන ආකාරය පරීක්ෂා කිරීමට Mock Messages ඇතුළත් කිරීම
+  // Initial welcome message and Socket.io message listener
   useEffect(() => {
     if (!roomID) return;
 
-    // කාමරයට ඇතුළු වූ පසු පෙන්වන System Message එක
-    const welcomeTimer = setTimeout(() => {
-      const welcomeMsg = {
-        id: 'welcome-msg',
-        senderId: 'system',
-        senderName: 'System Bot',
-        text: `Welcome to meeting room: ${roomID}! Feel free to invite others to connect.`,
-        timestamp: new Date().toISOString()
-      };
-      setMessages((prev) => [...prev, welcomeMsg]);
-      if (!isChatOpen) {
-        setUnreadCount((prev) => prev + 1);
-      }
-    }, 1500);
+    // Welcome system greeting
+    const welcomeMsg = {
+      id: `welcome-${roomID}`,
+      senderId: 'system',
+      senderName: 'System Bot',
+      text: `Welcome to meeting room: ${roomID}! Feel free to chat with participants.`,
+      timestamp: new Date().toISOString()
+    };
+    setMessages([welcomeMsg]);
 
-    // තත්පර 10කට පසු වෙනත් සාමාජිකයෙකු පණිවිඩයක් එවන ආකාරය අනුකරණය කිරීම (Simulate Peer Message)
-    const peerTimer = setTimeout(() => {
-      const peerMsg = {
-        id: `msg_${Date.now()}`,
-        senderId: 'mock_peer_1',
-        senderName: 'Sarah Connor',
-        text: "Hey everyone! Glad to join the call.",
-        timestamp: new Date().toISOString()
-      };
-      setMessages((prev) => [...prev, peerMsg]);
+    // Ensure socket is connected
+    if (!socket.connected) {
+      socket.connect();
+    }
+
+    // Listen for incoming live chat messages from peers
+    const handleReceiveMessage = (incomingMsg) => {
+      setMessages((prev) => {
+        // Prevent duplicate messages
+        if (prev.some(m => m.id === incomingMsg.id)) return prev;
+        return [...prev, incomingMsg];
+      });
+
       if (!isChatOpen) {
         setUnreadCount((prev) => prev + 1);
       }
-    }, 10000);
+    };
+
+    socket.on('receive-message', handleReceiveMessage);
 
     return () => {
-      clearTimeout(welcomeTimer);
-      clearTimeout(peerTimer);
+      socket.off('receive-message', handleReceiveMessage);
     };
   }, [roomID, isChatOpen]);
 
-  // පණිවිඩයක් පිටත් කිරීමේ ක්‍රියාවලිය
+  // Dispatch outgoing message to backend socket & database
   const sendMessage = useCallback((text) => {
+    if (!text || !text.trim()) return;
+
     const newMsg = {
-      id: `msg_${Date.now()}`,
+      id: `msg_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
       senderId: user?.id || 'guest_user',
       senderName: user?.fullName || 'Guest',
-      text: text,
+      text: text.trim(),
       timestamp: new Date().toISOString()
     };
-    
+
+    // Optimistic local state update
     setMessages((prev) => [...prev, newMsg]);
 
-    /* 
-       සැබෑ Backend එක සම්බන්ධ කළ පසු Socket.io මඟින් පණිවිඩය යැවීමට මෙම කේතය භාවිත කරයි:
-       socket.emit('send-message', { roomID, message: newMsg });
-    */
-  }, [user]);
+    // Broadcast to meeting room and persist in PostgreSQL via socketHandler.js
+    if (socket.connected) {
+      socket.emit('send-message', { roomID, message: newMsg });
+    }
+  }, [roomID, user]);
 
-  // Chat Panel එක විවෘත කිරීමේදී unread count එක බින්දුව (0) කිරීම
+  // Reset unread count when opening chat drawer
   const toggleChat = useCallback(() => {
     setIsChatOpen((prev) => {
       const nextState = !prev;
@@ -83,3 +85,5 @@ export const useChat = (roomID, user) => {
     toggleChat
   };
 };
+
+export default useChat;

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Plus, Keyboard, ArrowRight, Shield } from 'lucide-react';
 import { useMockAuth } from '../context/AuthContext';
+import api from '../config/api';
 import { toast } from 'react-hot-toast';
 
 export default function Dashboard() {
@@ -21,17 +22,38 @@ export default function Dashboard() {
     return `${part()}-${part()}-${part()}`;
   };
 
-  const handleCreateMeeting = () => {
+  const handleCreateMeeting = async () => {
     const id = generateMeetingID();
     toast.success("Creating meeting room...");
+
+    try {
+      await api.post('/meetings/create', {
+        meetingID: id,
+        title: `${user?.fullName || 'Great Stack'}'s Meeting`,
+        hostID: user?.id || 'user_mock_001'
+      });
+    } catch (err) {
+      console.warn("Backend meeting create warning:", err.message);
+    }
+
     navigate(`/meeting/${id}`);
   };
 
-  const handleJoinMeeting = (e) => {
+  const handleJoinMeeting = async (e) => {
     e.preventDefault();
     if (!meetingID.trim()) return;
     const cleanID = meetingID.trim().replace(/\s+/g, '');
     toast.success("Joining meeting room...");
+
+    try {
+      await api.post('/meetings/join-log', {
+        meetingID: cleanID,
+        userID: user?.id || 'user_mock_001'
+      });
+    } catch (err) {
+      console.warn("Backend join-log warning:", err.message);
+    }
+
     navigate(`/meeting/${cleanID}`);
   };
 
