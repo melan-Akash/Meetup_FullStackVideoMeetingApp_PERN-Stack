@@ -29,11 +29,17 @@ export async function initDB() {
         id VARCHAR(255) PRIMARY KEY,
         fullname VARCHAR(255) NOT NULL,
         email VARCHAR(255) NOT NULL UNIQUE,
+        password VARCHAR(255),
         image VARCHAR(500),
         plan VARCHAR(20) DEFAULT 'Free',
         created_at TIMESTAMPTZ DEFAULT NOW(),
         updated_at TIMESTAMPTZ DEFAULT NOW()
       );
+    `);
+
+    // Ensure password column exists if table already existed
+    await pool.query(`
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS password VARCHAR(255);
     `);
 
     // 2. Meetings Table
