@@ -46,7 +46,6 @@ export const AuthProvider = ({ children }) => {
       setUser(defaultUser);
       localStorage.setItem('meeting_guest', JSON.stringify(defaultUser));
       
-      // Auto-register default profile in backend PostgreSQL
       api.post('/auth/login', {
         id: defaultUser.id,
         fullName: defaultUser.fullName,
@@ -56,6 +55,77 @@ export const AuthProvider = ({ children }) => {
     setIsLoaded(true);
   }, []);
 
+  // 1. Register new user
+  const register = async (fullName, email, nickname) => {
+    const userId = `user_${Date.now()}`;
+    const userEmail = email.trim();
+    const displayName = (fullName || nickname || 'User').trim();
+
+    let profile = {
+      id: userId,
+      fullName: displayName,
+      email: userEmail,
+      plan: "Free"
+    };
+
+    try {
+      const res = await api.post('/auth/login', {
+        id: userId,
+        fullName: displayName,
+        email: userEmail
+      });
+      if (res.data) {
+        profile = {
+          ...profile,
+          ...res.data,
+          fullName: res.data.fullname || displayName
+        };
+      }
+    } catch (err) {
+      console.warn("Backend registration offline, saving locally:", err.message);
+    }
+
+    localStorage.setItem('meeting_guest', JSON.stringify(profile));
+    setUser(profile);
+    return profile;
+  };
+
+  // 2. Login with existing email/name
+  const loginWithEmail = async (email, nameHint) => {
+    const cleanEmail = email.trim();
+    const displayName = nameHint || cleanEmail.split('@')[0];
+    const userId = `user_${cleanEmail.replace(/[^a-zA-Z0-9]/g, '_')}`;
+
+    let profile = {
+      id: userId,
+      fullName: displayName,
+      email: cleanEmail,
+      plan: "Free"
+    };
+
+    try {
+      const res = await api.post('/auth/login', {
+        id: userId,
+        fullName: displayName,
+        email: cleanEmail
+      });
+      if (res.data) {
+        profile = {
+          ...profile,
+          ...res.data,
+          fullName: res.data.fullname || displayName
+        };
+      }
+    } catch (err) {
+      console.warn("Backend login offline, using local state:", err.message);
+    }
+
+    localStorage.setItem('meeting_guest', JSON.stringify(profile));
+    setUser(profile);
+    return profile;
+  };
+
+  // 3. Fast Guest Login (Nickname only)
   const login = async (nickname) => {
     const guestId = `guest_${Date.now()}`;
     const guestEmail = `${nickname.toLowerCase().replace(/\s+/g, '')}@guest.local`;
@@ -111,7 +181,16 @@ export const AuthProvider = ({ children }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, isLoaded, isSignedIn: !!user, login, logout, updatePlan }}>
+    <AuthContext.Provider value={{ 
+      user, 
+      isLoaded, 
+      isSignedIn: !!user, 
+      login, 
+      register, 
+      loginWithEmail, 
+      logout, 
+      updatePlan 
+    }}>
       {children}
     </AuthContext.Provider>
   );
