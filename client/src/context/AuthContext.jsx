@@ -22,7 +22,6 @@ export const AuthProvider = ({ children }) => {
           }
         })
         .catch(() => {
-          // If token expired or invalid, fallback to stored user or clear
           if (storedUser) {
             try {
               setUser(JSON.parse(storedUser));
@@ -37,7 +36,6 @@ export const AuthProvider = ({ children }) => {
       } catch (e) {}
       setIsLoaded(true);
     } else {
-      // Default Great Stack fallback
       const defaultUser = {
         id: "user_mock_001",
         fullName: "Great Stack",
@@ -51,7 +49,7 @@ export const AuthProvider = ({ children }) => {
     }
   }, []);
 
-  // 1. Register with Password & JWT
+  // 1. Register with Password & JWT + Send Welcome Email
   const register = async (fullName, email, password, nickname) => {
     const displayName = (fullName || nickname || 'User').trim();
     const userEmail = email.trim().toLowerCase();
@@ -68,6 +66,13 @@ export const AuthProvider = ({ children }) => {
         localStorage.setItem('meetup_token', res.data.token);
         localStorage.setItem('meeting_guest', JSON.stringify(res.data.user));
         setUser(res.data.user);
+
+        // Asynchronously dispatch welcome onboarding email
+        api.post('/email/send-welcome', {
+          email: userEmail,
+          fullName: displayName
+        }).catch(err => console.warn("Welcome email notice:", err.message));
+
         return res.data.user;
       }
     } catch (err) {

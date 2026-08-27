@@ -12,6 +12,7 @@ import ReactionsOverlay from '../components/meeting/reactions overlay.jsx';
 import WhiteboardModal from '../components/meeting/whiteboard modal.jsx';
 import MeetingNotesDrawer from '../components/meeting/meeting notes drawer.jsx';
 import SettingsModal from '../components/meeting/settings modal.jsx';
+import InviteEmailModal from '../components/meeting/invite email modal.jsx';
 import WaitingLobby from '../components/meeting/waiting lobby.jsx';
 import { toast } from 'react-hot-toast';
 
@@ -66,11 +67,12 @@ export default function MeetingRoom() {
     toggleRecording
   } = useRecording(roomID);
 
-  // Quality & Modals State
+  // Modals & Panels State
   const [isParticipantsOpen, setIsParticipantsOpen] = useState(false);
   const [isWhiteboardOpen, setIsWhiteboardOpen] = useState(false);
   const [isNotesOpen, setIsNotesOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isEmailInviteOpen, setIsEmailInviteOpen] = useState(false);
   const [virtualBackground, setVirtualBackground] = useState('none');
   const [noiseSuppressionEnabled, setNoiseSuppressionEnabled] = useState(true);
 
@@ -156,7 +158,7 @@ export default function MeetingRoom() {
           currentUser={user}
         />
 
-        {/* Participants List Sliding Drawer with Host Controls */}
+        {/* Participants List Sliding Drawer with Host Controls & Email Invite */}
         <ParticipantsList
           isOpen={isParticipantsOpen}
           onClose={toggleParticipants}
@@ -177,6 +179,7 @@ export default function MeetingRoom() {
           onToggleWaitingRoom={toggleWaitingRoom}
           onAdmitUser={admitUser}
           onDenyUser={denyUser}
+          onOpenEmailInvite={() => setIsEmailInviteOpen(true)}
         />
       </div>
 
@@ -196,6 +199,14 @@ export default function MeetingRoom() {
         onSelectVirtualBackground={(bgId) => setVirtualBackground(bgId)}
         noiseSuppressionEnabled={noiseSuppressionEnabled}
         onToggleNoiseSuppression={() => setNoiseSuppressionEnabled(prev => !prev)}
+      />
+
+      {/* Instant Email Invite Modal */}
+      <InviteEmailModal
+        isOpen={isEmailInviteOpen}
+        onClose={() => setIsEmailInviteOpen(false)}
+        roomID={roomID}
+        hostName={user?.fullName || 'Host'}
       />
 
       {/* Meeting Toolbar Controls */}

@@ -1,19 +1,18 @@
 import React, { useState } from 'react';
 import { 
   X, Calendar, Clock, Sparkles, Copy, Check, 
-  Share2, ArrowRight, Video, MessageCircle, Mail 
+  Share2, ArrowRight, Video, MessageCircle, Mail, Send 
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import api from '../../config/api';
 
 export default function ScheduleModal({ isOpen, onClose, user, onScheduledSuccess }) {
   const [title, setTitle] = useState('');
-  // Default to tomorrow at 10:00 AM
+  
   const getDefaultDateTime = () => {
     const d = new Date();
     d.setDate(d.getDate() + 1);
     d.setHours(10, 0, 0, 0);
-    // Format YYYY-MM-DDTHH:mm for datetime-local input
     const pad = (n) => String(n).padStart(2, '0');
     return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
   };
@@ -21,6 +20,7 @@ export default function ScheduleModal({ isOpen, onClose, user, onScheduledSucces
   const [scheduledAt, setScheduledAt] = useState(getDefaultDateTime);
   const [duration, setDuration] = useState(30); // in minutes
   const [description, setDescription] = useState('');
+  const [attendeeEmails, setAttendeeEmails] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
   // Result state after scheduling
@@ -39,8 +39,11 @@ export default function ScheduleModal({ isOpen, onClose, user, onScheduledSucces
 
     setIsLoading(true);
     try {
+      const meetingTitle = title.trim() || `${user?.fullName || 'Great Stack'}'s Meeting`;
+      
+      // 1. Schedule meeting in PostgreSQL
       const res = await api.post('/meetings/schedule', {
-        title: title.trim() || `${user?.fullName || 'Great Stack'}'s Meeting`,
+        title: meetingTitle,
         scheduledAt: new Date(scheduledAt).toISOString(),
         duration,
         description: description.trim(),
@@ -49,7 +52,33 @@ export default function ScheduleModal({ isOpen, onClose, user, onScheduledSucces
 
       if (res.data && res.data.success) {
         setScheduledResult(res.data);
-        toast.success("Meeting scheduled & invite link generated!");
+        toast.success("Meeting scheduled & link generated!");
+
+        // 2. Dispatch automated invitation emails if attendee emails were provided
+        if (attendeeEmails.trim()) {
+          const emails = attendeeEmails
+            .split(',')
+            .map(e => e.trim())
+            .filter(e => e.length > 0 && e.includes('@'));
+
+          if (emails.length > 0) {
+            try {
+              await api.post('/email/send-invite', {
+                recipientEmails: emails,
+                meetingId: res.data.meeting.id,
+                title: meetingTitle,
+                scheduledAt: new Date(scheduledAt).toISOString(),
+                duration,
+                description: description.trim(),
+                hostName: user?.fullName || 'Great Stack'
+              });
+              toast.success(`Branded invitation emails dispatched to ${emails.length} recipient(s)! ✉️`);
+            } catch (mailErr) {
+              console.warn("Could not dispatch invite emails:", mailErr.message);
+            }
+          }
+        }
+
         if (onScheduledSuccess) {
           onScheduledSuccess(res.data.meeting);
         }
@@ -94,6 +123,7 @@ export default function ScheduleModal({ isOpen, onClose, user, onScheduledSucces
     setScheduledResult(null);
     setTitle('');
     setDescription('');
+    setAttendeeEmails('');
     onClose();
   };
 
@@ -114,7 +144,7 @@ export default function ScheduleModal({ isOpen, onClose, user, onScheduledSucces
                 {scheduledResult ? "Meeting Invitation Ready" : "Schedule a Meeting"}
               </h3>
               <p className="text-xs text-slate-500">
-                {scheduledResult ? "Share this link with your participants" : "Set date, time, and generate invitation link"}
+                {scheduledResult ? "Share this link or email invitations" : "Set date, time, and invite attendees via email"}
               </p>
             </div>
           </div>
@@ -186,6 +216,28 @@ export default function ScheduleModal({ isOpen, onClose, user, onScheduledSucces
                 </div>
               </div>
 
+              {/* Invite Attendees via Email */}
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <label className="block text-[11px] font-semibold uppercase tracking-wider text-slate-600">
+                    Invite Attendees by Email
+                  </label>
+                  <span className="text-[10px] text-blue-600 font-medium">Automatic SMTP Dispatch</span>
+                </div>
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={attendeeEmails}
+                    onChange={(e) => setAttendeeEmails(e.target.value)}
+                    placeholder="e.g. colleague@gmail.com, partner@company.com"
+                    className="w-full px-3.5 py-2.5 rounded-2xl bg-slate-50 border border-slate-200/80 focus:border-blue-500 focus:bg-white text-xs text-slate-900 placeholder-slate-400 outline-none transition-all font-medium"
+                  />
+                </div>
+                <p className="text-[10px] text-slate-400 pl-1">
+                  Separate multiple emails with commas. Branded HTML invites will be sent automatically.
+                </p>
+              </div>
+
               {/* Description / Agenda */}
               <div className="space-y-1.5">
                 <label className="block text-[11px] font-semibold uppercase tracking-wider text-slate-600">
@@ -195,7 +247,7 @@ export default function ScheduleModal({ isOpen, onClose, user, onScheduledSucces
                   rows={2}
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
-                  placeholder="Add meeting agenda, discussion topics, or preparation notes..."
+                  placeholder="Add meeting agenda or preparation notes..."
                   className="w-full px-3.5 py-2.5 rounded-2xl bg-slate-50 border border-slate-200/80 focus:border-blue-500 focus:bg-white text-xs text-slate-900 placeholder-slate-400 outline-none transition-all font-medium resize-none"
                 />
               </div>
@@ -207,7 +259,7 @@ export default function ScheduleModal({ isOpen, onClose, user, onScheduledSucces
                 className="w-full mt-2 py-3.5 px-5 bg-[#0055ff] hover:bg-blue-700 disabled:bg-blue-400 text-white font-semibold text-xs sm:text-sm rounded-2xl shadow-md shadow-blue-500/25 flex items-center justify-center gap-2 transition-all cursor-pointer group"
               >
                 <Sparkles className="w-4 h-4" />
-                <span>{isLoading ? "Scheduling Meeting..." : "Schedule Meeting & Get Link"}</span>
+                <span>{isLoading ? "Scheduling & Sending Invites..." : "Schedule Meeting & Send Invites"}</span>
                 <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
               </button>
             </form>
@@ -289,7 +341,7 @@ export default function ScheduleModal({ isOpen, onClose, user, onScheduledSucces
                     className="py-2.5 px-3 rounded-2xl bg-blue-50 hover:bg-blue-100/80 text-blue-700 text-xs font-semibold flex items-center justify-center gap-1.5 border border-blue-200/60 transition-colors cursor-pointer"
                   >
                     <Mail className="w-4 h-4" />
-                    <span>Email Invite</span>
+                    <span>Email App</span>
                   </button>
                 </div>
               </div>

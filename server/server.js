@@ -13,6 +13,7 @@ import { initDB } from './config/db.js';
 // Import Routes and Socket handlers
 import authRoutes from './routes/authRoutes.js';
 import meetingRoutes from './routes/meetingRoutes.js';
+import emailRoutes from './routes/emailRoutes.js';
 import { handleSocketConnections } from './socket/socketHandler.js';
 
 const app = express();
@@ -41,6 +42,7 @@ app.get('/', (req, res) => {
 // Register API routes
 app.use('/api/auth', authRoutes);
 app.use('/api/meetings', meetingRoutes);
+app.use('/api/email', emailRoutes);
 
 // Configure Socket.io server for WebRTC signaling and Live Chat
 const io = new Server(httpServer, {

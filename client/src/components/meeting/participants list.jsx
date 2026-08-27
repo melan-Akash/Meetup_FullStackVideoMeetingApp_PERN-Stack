@@ -1,7 +1,7 @@
 import React from 'react';
 import { 
   X, Mic, MicOff, Video, VideoOff, Crown, Monitor, 
-  VolumeX, Lock, Unlock, Shield, UserX, Check 
+  VolumeX, Lock, Unlock, Shield, UserX, Check, Mail 
 } from 'lucide-react';
 
 export default function ParticipantsList({
@@ -23,7 +23,8 @@ export default function ParticipantsList({
   onToggleLockMeeting,
   onToggleWaitingRoom,
   onAdmitUser,
-  onDenyUser
+  onDenyUser,
+  onOpenEmailInvite
 }) {
   if (!isOpen) return null;
 
@@ -43,48 +44,61 @@ export default function ParticipantsList({
         </button>
       </div>
 
-      {/* Host Moderation Controls Bar (Visible to Host) */}
-      {isHost && (
-        <div className="p-3 bg-slate-50/80 border-b border-slate-100 flex items-center justify-between gap-1.5 flex-wrap">
-          {/* Mute All Button */}
-          <button
-            onClick={onMuteAll}
-            className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-white hover:bg-rose-50 border border-slate-200/80 hover:border-rose-200 text-slate-700 hover:text-rose-600 text-[11px] font-semibold shadow-2xs transition-colors cursor-pointer"
-            title="Mute everyone in the meeting"
-          >
-            <VolumeX className="w-3.5 h-3.5" />
-            <span>Mute All</span>
-          </button>
+      {/* Host Controls & Email Invite Bar */}
+      <div className="p-3 bg-slate-50/80 border-b border-slate-100 space-y-2">
+        {isHost && (
+          <div className="flex items-center justify-between gap-1.5 flex-wrap">
+            {/* Mute All Button */}
+            <button
+              onClick={onMuteAll}
+              className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-white hover:bg-rose-50 border border-slate-200/80 hover:border-rose-200 text-slate-700 hover:text-rose-600 text-[11px] font-semibold shadow-2xs transition-colors cursor-pointer"
+              title="Mute everyone in the meeting"
+            >
+              <VolumeX className="w-3.5 h-3.5" />
+              <span>Mute All</span>
+            </button>
 
-          {/* Lock Meeting Toggle */}
-          <button
-            onClick={onToggleLockMeeting}
-            className={`flex items-center gap-1 px-2.5 py-1.5 rounded-xl border text-[11px] font-semibold shadow-2xs transition-colors cursor-pointer ${
-              isRoomLocked 
-                ? 'bg-amber-50 border-amber-300 text-amber-700' 
-                : 'bg-white hover:bg-slate-100 border-slate-200/80 text-slate-700'
-            }`}
-            title={isRoomLocked ? "Unlock Meeting" : "Lock Meeting (Prevent new joins)"}
-          >
-            {isRoomLocked ? <Lock className="w-3.5 h-3.5 text-amber-600" /> : <Unlock className="w-3.5 h-3.5 text-slate-500" />}
-            <span>{isRoomLocked ? "Locked" : "Lock"}</span>
-          </button>
+            {/* Lock Meeting Toggle */}
+            <button
+              onClick={onToggleLockMeeting}
+              className={`flex items-center gap-1 px-2.5 py-1.5 rounded-xl border text-[11px] font-semibold shadow-2xs transition-colors cursor-pointer ${
+                isRoomLocked 
+                  ? 'bg-amber-50 border-amber-300 text-amber-700' 
+                  : 'bg-white hover:bg-slate-100 border-slate-200/80 text-slate-700'
+              }`}
+              title={isRoomLocked ? "Unlock Meeting" : "Lock Meeting (Prevent new joins)"}
+            >
+              {isRoomLocked ? <Lock className="w-3.5 h-3.5 text-amber-600" /> : <Unlock className="w-3.5 h-3.5 text-slate-500" />}
+              <span>{isRoomLocked ? "Locked" : "Lock"}</span>
+            </button>
 
-          {/* Waiting Room Toggle */}
+            {/* Waiting Room Toggle */}
+            <button
+              onClick={onToggleWaitingRoom}
+              className={`flex items-center gap-1 px-2.5 py-1.5 rounded-xl border text-[11px] font-semibold shadow-2xs transition-colors cursor-pointer ${
+                isWaitingRoomEnabled 
+                  ? 'bg-blue-50 border-blue-300 text-blue-700' 
+                  : 'bg-white hover:bg-slate-100 border-slate-200/80 text-slate-700'
+              }`}
+              title={isWaitingRoomEnabled ? "Disable Waiting Room" : "Enable Waiting Room (Admit guests manually)"}
+            >
+              <Shield className="w-3.5 h-3.5" />
+              <span>{isWaitingRoomEnabled ? "Lobby: ON" : "Lobby: OFF"}</span>
+            </button>
+          </div>
+        )}
+
+        {/* Email Invite Quick Button */}
+        {onOpenEmailInvite && (
           <button
-            onClick={onToggleWaitingRoom}
-            className={`flex items-center gap-1 px-2.5 py-1.5 rounded-xl border text-[11px] font-semibold shadow-2xs transition-colors cursor-pointer ${
-              isWaitingRoomEnabled 
-                ? 'bg-blue-50 border-blue-300 text-blue-700' 
-                : 'bg-white hover:bg-slate-100 border-slate-200/80 text-slate-700'
-            }`}
-            title={isWaitingRoomEnabled ? "Disable Waiting Room" : "Enable Waiting Room (Admit guests manually)"}
+            onClick={onOpenEmailInvite}
+            className="w-full py-2 px-3 bg-white hover:bg-blue-50 border border-slate-200 hover:border-blue-200 text-blue-600 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 shadow-2xs transition-colors cursor-pointer"
           >
-            <Shield className="w-3.5 h-3.5" />
-            <span>{isWaitingRoomEnabled ? "Lobby: ON" : "Lobby: OFF"}</span>
+            <Mail className="w-3.5 h-3.5" />
+            <span>Invite Friend via Email</span>
           </button>
-        </div>
-      )}
+        )}
+      </div>
 
       {/* Participants Container */}
       <div className="grow overflow-y-auto p-4 space-y-3">
@@ -187,7 +201,6 @@ export default function ParticipantsList({
                 </div>
 
                 <div className="flex items-center gap-1.5 shrink-0">
-                  {/* Status icons */}
                   {p.audioEnabled ? (
                     <Mic className="w-3.5 h-3.5 text-emerald-500" />
                   ) : (
