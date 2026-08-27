@@ -1,7 +1,7 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useMockAuth } from '../context/AuthContext';
-import { useWebRTC } from '../hooks/use web RTC.js';
+import { useWebRTC } from '../hooks/useWebRTC.js';
 import { useChat } from '../hooks/use chat.js';
 import { useRecording } from '../hooks/use recording.js';
 import VideoGrid from '../components/meeting/video grid.jsx';
@@ -23,6 +23,24 @@ export default function MeetingRoom() {
   const { id: roomID } = useParams();
   const navigate = useNavigate();
   const { user } = useMockAuth();
+
+  // Create a persistent guest user identity if not logged in
+  const currentUser = useMemo(() => {
+    if (user) return user;
+    const stored = localStorage.getItem('meeting_guest');
+    if (stored) {
+      try { return JSON.parse(stored); } catch (e) {}
+    }
+    const guestObj = {
+      id: `guest_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+      fullName: `Guest_${Math.floor(100 + Math.random() * 900)}`,
+      name: `Guest_${Math.floor(100 + Math.random() * 900)}`,
+      email: 'guest@meetup.local',
+      plan: 'Free'
+    };
+    localStorage.setItem('meeting_guest', JSON.stringify(guestObj));
+    return guestObj;
+  }, [user]);
 
   const handleMeetingEnded = useCallback((msg) => {
     toast.success(msg || "Meeting room closed.");
@@ -54,7 +72,7 @@ export default function MeetingRoom() {
     admitUser,
     denyUser,
     endMeeting
-  } = useWebRTC(roomID, user, handleMeetingEnded, true, true);
+  } = useWebRTC(roomID, currentUser, handleMeetingEnded, true, false);
 
   const {
     messages,
@@ -62,7 +80,7 @@ export default function MeetingRoom() {
     unreadCount,
     isChatOpen,
     toggleChat
-  } = useChat(roomID, user);
+  } = useChat(roomID, currentUser);
 
   const {
     isRecording,
@@ -108,18 +126,18 @@ export default function MeetingRoom() {
   }
 
   const allParticipants = [
-    { id: user?.id, name: user?.fullName || 'You' },
-    ...remoteUsers.map(u => ({ id: u.socketId, name: u.username || u.userName || 'Participant' }))
+    { id: currentUser?.id, name: currentUser?.fullName || 'You' },
+    ...remoteUsers.map(u => ({ id: u.socketId, name: u.userName || u.username || 'Participant' }))
   ];
 
   return (
     <div className="flex flex-col h-screen bg-[#f0f4f8] text-slate-900 overflow-hidden select-none relative">
       
       {/* Top Header */}
-      <header className="px-6 sm:px-8 py-3.5 flex items-center justify-between shrink-0 bg-white/70 backdrop-blur-md border-b border-slate-200/80">
-        <div className="flex items-center gap-2.5">
-          <h2 className="text-sm font-bold text-slate-800 flex items-center gap-2">
-            <span>Meeting Room ({roomID})</span>
+      <header className="px-4 sm:px-8 py-3 flex items-center justify-between shrink-0 bg-white/80 backdrop-blur-md border-b border-slate-200/80">
+        <div className="flex items-center gap-2 sm:gap-2.5 flex-wrap">
+          <h2 className="text-xs sm:text-sm font-bold text-slate-800 flex items-center gap-2">
+            <span>Room: {roomID}</span>
             <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
           </h2>
 
@@ -159,14 +177,14 @@ export default function MeetingRoom() {
         {/* Live Speech Subtitles Overlay */}
         <LiveCaptions
           isEnabled={isLiveCaptionsEnabled}
-          username={user?.fullName || 'You'}
+          username={currentUser?.fullName || 'You'}
         />
 
         {/* Video Grid Feed */}
-        <div className="grow flex items-center justify-center p-6 sm:p-8">
+        <div className="grow flex items-center justify-center p-3 sm:p-6 overflow-hidden">
           <VideoGrid
             localStream={localStream}
-            localUser={user}
+            localUser={currentUser}
             remoteUsers={remoteUsers}
             audioEnabled={audioEnabled}
             videoEnabled={videoEnabled}
@@ -182,7 +200,7 @@ export default function MeetingRoom() {
           onClose={toggleChat}
           messages={messages}
           onSendMessage={sendMessage}
-          currentUser={user}
+          currentUser={currentUser}
         />
 
         {/* AI Co-Pilot Assistant Sliding Drawer */}
@@ -199,14 +217,14 @@ export default function MeetingRoom() {
           isOpen={isNotesOpen}
           onClose={toggleNotes}
           roomID={roomID}
-          currentUser={user}
+          currentUser={currentUser}
         />
 
         {/* Participants List Sliding Drawer with Host Controls & Email Invite */}
         <ParticipantsList
           isOpen={isParticipantsOpen}
           onClose={toggleParticipants}
-          localUser={user}
+          localUser={currentUser}
           localAudio={audioEnabled}
           localVideo={videoEnabled}
           localIsHandRaised={isHandRaised}
@@ -250,7 +268,7 @@ export default function MeetingRoom() {
         isOpen={isEmailInviteOpen}
         onClose={() => setIsEmailInviteOpen(false)}
         roomID={roomID}
-        hostName={user?.fullName || 'Host'}
+        hostName={currentUser?.fullName || 'Host'}
       />
 
       {/* AI Meeting Summary & Action Items Modal */}
@@ -260,7 +278,7 @@ export default function MeetingRoom() {
         meetingTitle="Live Meeting Session"
         messages={messages}
         participants={allParticipants}
-        user={user}
+        user={currentUser}
       />
 
       {/* Meeting Toolbar Controls */}

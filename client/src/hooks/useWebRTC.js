@@ -1,18 +1,21 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { socket } from "../config/socket";
 import toast from "react-hot-toast";
+import api from "../config/api";
 
 const ICE_SERVERS = {
     iceServers: [
         { urls: "stun:stun.l.google.com:19302" },
         { urls: "stun:stun1.l.google.com:19302" },
         { urls: "stun:stun2.l.google.com:19302" },
+        { urls: "stun:stun3.l.google.com:19302" },
+        { urls: "stun:stun4.l.google.com:19302" },
     ],
 };
 
 export const useWebRTC = (roomId, user, onMeetingEnded, enabled = true, isHost = false) => {
     const [localStream, setLocalStream] = useState(null);
-    const [remoteUsers, setRemoteUsers] = useState([]); // Array of { socketId, userId, userName, stream, audioEnabled, videoEnabled, isHandRaised, isScreenSharing, isHost }
+    const [remoteUsers, setRemoteUsers] = useState([]); // Array of { socketId, userId, userName, avatarUrl, stream, audioEnabled, videoEnabled, isHandRaised, isScreenSharing, isHost }
     const [audioEnabled, setAudioEnabled] = useState(true);
     const [videoEnabled, setVideoEnabled] = useState(true);
     
@@ -31,7 +34,22 @@ export const useWebRTC = (roomId, user, onMeetingEnded, enabled = true, isHost =
     const [waitingUsers, setWaitingUsers] = useState([]); // [{ socketId, userId, userName }]
 
     const peersRef = useRef(new Map()); // socketId -> RTCPeerConnection
+    const candidateQueueRef = useRef(new Map()); // socketId -> RTCIceCandidate[]
     const localStreamRef = useRef(null);
+
+    // Helper to flush queued ICE candidates
+    const flushCandidates = async (targetSocketId, peer) => {
+        const queue = candidateQueueRef.current.get(targetSocketId) || [];
+        while (queue.length > 0) {
+            const candidate = queue.shift();
+            try {
+                await peer.addIceCandidate(candidate);
+            } catch (err) {
+                console.warn("Failed adding queued ICE candidate:", err);
+            }
+        }
+        candidateQueueRef.current.delete(targetSocketId);
+    };
 
     // Initialize local camera & mic media stream
     const initLocalStream = useCallback(async () => {
@@ -44,7 +62,7 @@ export const useWebRTC = (roomId, user, onMeetingEnded, enabled = true, isHost =
             setLocalStream(stream);
             return stream;
         } catch (error) {
-            console.warn("Camera/microphone primary access note:", error.message);
+            console.warn("Camera/mic access warning:", error.message);
             try {
                 const audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
                 localStreamRef.current = audioStream;
@@ -52,7 +70,7 @@ export const useWebRTC = (roomId, user, onMeetingEnded, enabled = true, isHost =
                 setVideoEnabled(false);
                 return audioStream;
             } catch (err) {
-                console.warn("Audio fallback note:", err.message);
+                console.warn("Audio fallback access warning:", err.message);
                 return null;
             }
         }
@@ -76,7 +94,7 @@ export const useWebRTC = (roomId, user, onMeetingEnded, enabled = true, isHost =
 
         const peer = new RTCPeerConnection(ICE_SERVERS);
 
-        // Add local tracks (camera or screen share) to peer connection
+        // Add local tracks to peer connection
         const activeStream = screenStreamRef.current || localStreamRef.current;
         if (activeStream) {
             activeStream.getTracks().forEach((track) => {
@@ -105,6 +123,8 @@ export const useWebRTC = (roomId, user, onMeetingEnded, enabled = true, isHost =
                     updated[existingIndex] = {
                         ...updated[existingIndex],
                         stream: remoteStream,
+                        userName: targetUser?.userName || targetUser?.username || updated[existingIndex].userName || "Participant",
+                        avatarUrl: targetUser?.avatarUrl || targetUser?.imageUrl || updated[existingIndex].avatarUrl
                     };
                     return updated;
                 } else {
@@ -112,8 +132,9 @@ export const useWebRTC = (roomId, user, onMeetingEnded, enabled = true, isHost =
                         ...prev,
                         {
                             socketId: targetSocketId,
-                            userId: targetUser?.userId,
+                            userId: targetUser?.userId || targetUser?.id,
                             userName: targetUser?.userName || targetUser?.username || "Participant",
+                            avatarUrl: targetUser?.avatarUrl || targetUser?.imageUrl,
                             stream: remoteStream,
                             audioEnabled: targetUser?.audioEnabled ?? true,
                             videoEnabled: targetUser?.videoEnabled ?? true,
@@ -126,13 +147,35 @@ export const useWebRTC = (roomId, user, onMeetingEnded, enabled = true, isHost =
             });
         };
 
+        // Store peer
         peersRef.current.set(targetSocketId, peer);
+
+        // Also register in remoteUsers state so name/avatar appear immediately
+        setRemoteUsers((prev) => {
+            if (prev.some((u) => u.socketId === targetSocketId)) return prev;
+            return [
+                ...prev,
+                {
+                    socketId: targetSocketId,
+                    userId: targetUser?.userId || targetUser?.id,
+                    userName: targetUser?.userName || targetUser?.username || "Participant",
+                    avatarUrl: targetUser?.avatarUrl || targetUser?.imageUrl,
+                    stream: null,
+                    audioEnabled: targetUser?.audioEnabled ?? true,
+                    videoEnabled: targetUser?.videoEnabled ?? true,
+                    isHandRaised: targetUser?.isHandRaised ?? false,
+                    isScreenSharing: targetUser?.isScreenSharing ?? false,
+                    isHost: targetUser?.isHost ?? false,
+                },
+            ];
+        });
+
         return peer;
     }, []);
 
     // Main WebRTC & Socket signaling setup effect
     useEffect(() => {
-        if (!roomId || !user || !enabled) return;
+        if (!roomId || !enabled) return;
 
         let isMounted = true;
 
@@ -145,10 +188,29 @@ export const useWebRTC = (roomId, user, onMeetingEnded, enabled = true, isHost =
                 socket.connect();
             }
 
+            // Log join to PostgreSQL
+            if (user?.id) {
+                api.post('/meetings/join-log', {
+                    meetingID: roomId,
+                    userID: user.id
+                }).catch(() => {});
+            }
+
+            const currentUserData = {
+                id: user?.id || `guest_${Date.now()}`,
+                userId: user?.id || `guest_${Date.now()}`,
+                fullName: user?.fullName || user?.name || 'Guest User',
+                name: user?.fullName || user?.name || 'Guest User',
+                userName: user?.fullName || user?.name || 'Guest User',
+                imageUrl: user?.imageUrl || null,
+                avatarUrl: user?.imageUrl || null
+            };
+
             // Emit join room
             socket.emit("join-room", {
                 roomId,
-                user,
+                roomID: roomId,
+                user: currentUserData,
                 audioEnabled: true,
                 videoEnabled: true,
                 isHost,
@@ -156,6 +218,8 @@ export const useWebRTC = (roomId, user, onMeetingEnded, enabled = true, isHost =
 
             // 1. Receive all existing users in room
             socket.on("all-users", (existingUsers) => {
+                if (!Array.isArray(existingUsers)) return;
+
                 existingUsers.forEach((existingUser) => {
                     const peer = createPeerConnection(existingUser.socketId, existingUser);
 
@@ -166,6 +230,7 @@ export const useWebRTC = (roomId, user, onMeetingEnded, enabled = true, isHost =
                                 targetSocketId: existingUser.socketId,
                                 callerSocketId: socket.id,
                                 sdp: peer.localDescription,
+                                callerUser: currentUserData
                             });
                         })
                         .catch((err) => console.error("Error creating offer:", err));
@@ -174,7 +239,7 @@ export const useWebRTC = (roomId, user, onMeetingEnded, enabled = true, isHost =
 
             // 2. Someone new joined
             socket.on("user-joined", (newUser) => {
-                toast(`${newUser.userName} joined the meeting`, { icon: "👋" });
+                toast(`${newUser.userName || newUser.username || 'Someone'} joined the meeting`, { icon: "👋" });
                 createPeerConnection(newUser.socketId, newUser);
             });
 
@@ -183,6 +248,8 @@ export const useWebRTC = (roomId, user, onMeetingEnded, enabled = true, isHost =
                 const peer = createPeerConnection(callerSocketId, callerUser);
                 try {
                     await peer.setRemoteDescription(new RTCSessionDescription(sdp));
+                    await flushCandidates(callerSocketId, peer);
+
                     const answer = await peer.createAnswer();
                     await peer.setLocalDescription(answer);
 
@@ -190,6 +257,7 @@ export const useWebRTC = (roomId, user, onMeetingEnded, enabled = true, isHost =
                         targetSocketId: callerSocketId,
                         responderSocketId: socket.id,
                         sdp: peer.localDescription,
+                        responderUser: currentUserData
                     });
                 } catch (err) {
                     console.error("Error handling offer:", err);
@@ -197,26 +265,34 @@ export const useWebRTC = (roomId, user, onMeetingEnded, enabled = true, isHost =
             });
 
             // 4. Receive answer
-            socket.on("answer", async ({ responderSocketId, sdp }) => {
+            socket.on("answer", async ({ responderSocketId, sdp, responderUser }) => {
                 const peer = peersRef.current.get(responderSocketId);
                 if (peer) {
                     try {
                         await peer.setRemoteDescription(new RTCSessionDescription(sdp));
+                        await flushCandidates(responderSocketId, peer);
                     } catch (err) {
                         console.error("Error setting remote description:", err);
                     }
                 }
             });
 
-            // 5. Receive ICE candidate
+            // 5. Receive ICE candidate with queueing
             socket.on("ice-candidate", async ({ senderSocketId, candidate }) => {
+                if (!candidate) return;
                 const peer = peersRef.current.get(senderSocketId);
-                if (peer && candidate) {
+
+                if (peer && peer.remoteDescription && peer.remoteDescription.type) {
                     try {
                         await peer.addIceCandidate(new RTCIceCandidate(candidate));
                     } catch (err) {
-                        console.error("Error adding ICE candidate:", err);
+                        console.warn("Error adding ICE candidate:", err);
                     }
+                } else {
+                    // Queue candidate until remoteDescription is set
+                    const queue = candidateQueueRef.current.get(senderSocketId) || [];
+                    queue.push(new RTCIceCandidate(candidate));
+                    candidateQueueRef.current.set(senderSocketId, queue);
                 }
             });
 
@@ -260,13 +336,11 @@ export const useWebRTC = (roomId, user, onMeetingEnded, enabled = true, isHost =
                     peer.close();
                     peersRef.current.delete(socketId);
                 }
+                candidateQueueRef.current.delete(socketId);
                 setRemoteUsers((prev) => prev.filter((u) => u.socketId !== socketId));
             });
 
-            // ====================================================
             // 11. HOST MODERATION INCOMING EVENTS
-            // ====================================================
-            // Muted by host
             socket.on("force-muted", ({ message }) => {
                 if (localStreamRef.current) {
                     const audioTrack = localStreamRef.current.getAudioTracks()[0];
@@ -278,7 +352,6 @@ export const useWebRTC = (roomId, user, onMeetingEnded, enabled = true, isHost =
                 toast(message || "You have been muted by the host.", { icon: "🔇" });
             });
 
-            // Kicked by host
             socket.on("user-kicked", ({ message }) => {
                 toast.error(message || "You have been removed from the meeting by the host.");
                 if (onMeetingEnded) {
@@ -286,7 +359,6 @@ export const useWebRTC = (roomId, user, onMeetingEnded, enabled = true, isHost =
                 }
             });
 
-            // Meeting locked
             socket.on("meeting-locked", ({ message }) => {
                 toast.error(message || "This meeting is locked by the host.");
                 if (onMeetingEnded) {
@@ -294,18 +366,14 @@ export const useWebRTC = (roomId, user, onMeetingEnded, enabled = true, isHost =
                 }
             });
 
-            // Guest waiting in lobby
             socket.on("waiting-in-lobby", () => {
                 setIsWaitingInLobby(true);
             });
 
-            // Guest admitted by host
             socket.on("user-admitted", ({ existingUsers }) => {
                 setIsWaitingInLobby(false);
-                toast.success("Host admitted you to the meeting!");
-
-                // Connect to existing peers
-                if (existingUsers && Array.isArray(existingUsers)) {
+                toast.success("Host has admitted you to the meeting! 🎉");
+                if (Array.isArray(existingUsers)) {
                     existingUsers.forEach((existingUser) => {
                         const peer = createPeerConnection(existingUser.socketId, existingUser);
                         peer.createOffer()
@@ -315,51 +383,38 @@ export const useWebRTC = (roomId, user, onMeetingEnded, enabled = true, isHost =
                                     targetSocketId: existingUser.socketId,
                                     callerSocketId: socket.id,
                                     sdp: peer.localDescription,
+                                    callerUser: currentUserData
                                 });
-                            })
-                            .catch((err) => console.error("Error creating offer:", err));
+                            });
                     });
                 }
             });
 
-            // Guest denied by host
             socket.on("user-denied", ({ message }) => {
-                setIsWaitingInLobby(false);
-                toast.error(message || "The host denied your request to join.");
+                toast.error(message || "The host denied your request to enter.");
                 if (onMeetingEnded) {
                     onMeetingEnded(message);
                 }
             });
 
-            // Host receives updated waiting list
-            socket.on("waiting-users-updated", (usersList) => {
-                setWaitingUsers(usersList || []);
-                if (usersList && usersList.length > 0) {
-                    const latest = usersList[usersList.length - 1];
-                    toast(`${latest.userName} is waiting to join`, { icon: "🚪" });
-                }
-            });
-
-            // Room settings sync
-            socket.on("room-settings-sync", ({ isLocked, isWaitingRoomEnabled, waitingUsers: currentWaiting }) => {
-                setIsRoomLocked(isLocked ?? false);
-                setIsWaitingRoomEnabled(isWaitingRoomEnabled ?? false);
-                if (currentWaiting) setWaitingUsers(currentWaiting);
-            });
-
             socket.on("room-lock-changed", ({ isLocked }) => {
                 setIsRoomLocked(isLocked);
-                toast(isLocked ? "Meeting is now locked 🔒" : "Meeting is unlocked 🔓");
+                toast(isLocked ? "Meeting has been locked by the host 🔒" : "Meeting has been unlocked 🔓");
             });
 
             socket.on("waiting-room-changed", ({ isWaitingRoomEnabled }) => {
                 setIsWaitingRoomEnabled(isWaitingRoomEnabled);
-                toast(isWaitingRoomEnabled ? "Waiting room enabled 🚪" : "Waiting room disabled");
             });
 
-            // 12. Handle meeting ended
+            socket.on("waiting-users-updated", (users) => {
+                setWaitingUsers(users || []);
+                if (users && users.length > 0 && isHost) {
+                    toast(`${users[users.length - 1].userName} is in the waiting room`, { icon: "🚪" });
+                }
+            });
+
             socket.on("meeting-ended", ({ message }) => {
-                toast.error(message || "This meeting has ended");
+                toast(message || "Meeting ended by host.");
                 if (onMeetingEnded) {
                     onMeetingEnded(message);
                 }
@@ -368,21 +423,24 @@ export const useWebRTC = (roomId, user, onMeetingEnded, enabled = true, isHost =
 
         startSession();
 
-        // Cleanup
         return () => {
             isMounted = false;
+            socket.emit("leave-room", { roomId });
+            
+            // Clean peer connections
+            peersRef.current.forEach((peer) => peer.close());
+            peersRef.current.clear();
+            candidateQueueRef.current.clear();
 
+            // Stop local tracks
             if (localStreamRef.current) {
                 localStreamRef.current.getTracks().forEach((track) => track.stop());
             }
-
             if (screenStreamRef.current) {
                 screenStreamRef.current.getTracks().forEach((track) => track.stop());
             }
 
-            peersRef.current.forEach((peer) => peer.close());
-            peersRef.current.clear();
-
+            // Remove socket listeners
             socket.off("all-users");
             socket.off("user-joined");
             socket.off("offer");
@@ -400,194 +458,139 @@ export const useWebRTC = (roomId, user, onMeetingEnded, enabled = true, isHost =
             socket.off("waiting-in-lobby");
             socket.off("user-admitted");
             socket.off("user-denied");
-            socket.off("waiting-users-updated");
-            socket.off("room-settings-sync");
             socket.off("room-lock-changed");
             socket.off("waiting-room-changed");
+            socket.off("waiting-users-updated");
             socket.off("meeting-ended");
-
-            socket.disconnect();
         };
     }, [roomId, user?.id, enabled, isHost, createPeerConnection, initLocalStream, onMeetingEnded]);
 
-    // ====================================================
-    // SCREEN SHARING CONTROLS
-    // ====================================================
-    const startScreenShare = async () => {
-        try {
-            const screenStream = await navigator.mediaDevices.getDisplayMedia({
-                video: { cursor: "always" },
-                audio: false,
-            });
-
-            screenStreamRef.current = screenStream;
-            const screenVideoTrack = screenStream.getVideoTracks()[0];
-
-            screenVideoTrack.onended = () => {
-                stopScreenShare();
-            };
-
-            replaceTrackOnPeers(screenVideoTrack);
-            setLocalStream(screenStream);
-            setIsScreenSharing(true);
-
-            socket.emit("toggle-screen-share", { roomId, isSharing: true });
-            toast.success("Screen sharing started");
-        } catch (err) {
-            if (err.name !== "NotAllowedError") {
-                toast.error("Could not start screen sharing");
-                console.error("Screen share error:", err);
-            }
-        }
-    };
-
-    const stopScreenShare = () => {
-        if (screenStreamRef.current) {
-            screenStreamRef.current.getTracks().forEach((track) => track.stop());
-            screenStreamRef.current = null;
-        }
-
+    // Media Controls
+    const toggleAudio = useCallback(() => {
         if (localStreamRef.current) {
-            const cameraVideoTrack = localStreamRef.current.getVideoTracks()[0];
-            if (cameraVideoTrack) {
-                replaceTrackOnPeers(cameraVideoTrack);
+            const audioTrack = localStreamRef.current.getAudioTracks()[0];
+            if (audioTrack) {
+                const nextState = !audioTrack.enabled;
+                audioTrack.enabled = nextState;
+                setAudioEnabled(nextState);
+                socket.emit("toggle-audio", { roomId, audioEnabled: nextState });
             }
-            setLocalStream(localStreamRef.current);
         }
+    }, [roomId]);
 
-        setIsScreenSharing(false);
-        socket.emit("toggle-screen-share", { roomId, isSharing: false });
-        toast("Screen sharing stopped");
-    };
+    const toggleVideo = useCallback(() => {
+        if (localStreamRef.current) {
+            const videoTrack = localStreamRef.current.getVideoTracks()[0];
+            if (videoTrack) {
+                const nextState = !videoTrack.enabled;
+                videoTrack.enabled = nextState;
+                setVideoEnabled(nextState);
+                socket.emit("toggle-video", { roomId, videoEnabled: nextState });
+            }
+        }
+    }, [roomId]);
 
-    const toggleScreenShare = () => {
-        if (isScreenSharing) {
-            stopScreenShare();
+    const toggleScreenShare = useCallback(async () => {
+        if (!isScreenSharing) {
+            try {
+                const screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
+                screenStreamRef.current = screenStream;
+                setIsScreenSharing(true);
+
+                const screenVideoTrack = screenStream.getVideoTracks()[0];
+                replaceTrackOnPeers(screenVideoTrack);
+                socket.emit("toggle-screen-share", { roomId, isSharing: true });
+
+                screenVideoTrack.onended = () => {
+                    setIsScreenSharing(false);
+                    screenStreamRef.current = null;
+                    if (localStreamRef.current) {
+                        const originalVideoTrack = localStreamRef.current.getVideoTracks()[0];
+                        replaceTrackOnPeers(originalVideoTrack);
+                    }
+                    socket.emit("toggle-screen-share", { roomId, isSharing: false });
+                };
+            } catch (err) {
+                console.warn("Screen share cancelled or failed:", err.message);
+            }
         } else {
-            startScreenShare();
+            if (screenStreamRef.current) {
+                screenStreamRef.current.getTracks().forEach((track) => track.stop());
+                screenStreamRef.current = null;
+            }
+            setIsScreenSharing(false);
+            if (localStreamRef.current) {
+                const originalVideoTrack = localStreamRef.current.getVideoTracks()[0];
+                replaceTrackOnPeers(originalVideoTrack);
+            }
+            socket.emit("toggle-screen-share", { roomId, isSharing: false });
         }
-    };
+    }, [isScreenSharing, replaceTrackOnPeers, roomId]);
 
-    // ====================================================
-    // RAISE HAND CONTROLS
-    // ====================================================
-    const toggleRaiseHand = () => {
+    const toggleRaiseHand = useCallback(() => {
         const nextState = !isHandRaised;
         setIsHandRaised(nextState);
-
         socket.emit("raise-hand", {
             roomId,
-            isHandRaised: nextState,
-            userName: user?.fullName || user?.name || "You",
             userId: user?.id,
+            userName: user?.fullName || user?.name || "Participant",
+            isHandRaised: nextState,
         });
+    }, [isHandRaised, roomId, user]);
 
-        if (nextState) {
-            toast("You raised your hand", { icon: "✋" });
-        } else {
-            toast("You lowered your hand");
-        }
-    };
-
-    // ====================================================
-    // EMOJI REACTION CONTROLS
-    // ====================================================
-    const sendReaction = (emoji) => {
-        const reactionData = {
-            id: `react_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
-            socketId: socket.id,
-            userName: user?.fullName || user?.name || "You",
-            emoji,
-            timestamp: Date.now(),
-        };
-
-        setReactions((prev) => [...prev, reactionData]);
-        setTimeout(() => {
-            setReactions((prev) => prev.filter((r) => r.id !== reactionData.id));
-        }, 4000);
-
+    const sendReaction = useCallback((emoji) => {
         socket.emit("send-reaction", {
             roomId,
             emoji,
             userName: user?.fullName || user?.name || "Participant",
         });
-    };
+    }, [roomId, user]);
 
-    // ====================================================
-    // HOST MODERATION METHODS
-    // ====================================================
-    const muteParticipant = (targetSocketId) => {
+    // Host Moderation Actions
+    const muteParticipant = useCallback((targetSocketId) => {
         socket.emit("mute-user", { roomId, targetSocketId });
-        toast("Participant muted");
-    };
+        toast.success("Muted participant");
+    }, [roomId]);
 
-    const muteAll = () => {
+    const muteAll = useCallback(() => {
         socket.emit("mute-all", { roomId });
-        toast("Muted all participants");
-    };
+        toast.success("Muted all participants");
+    }, [roomId]);
 
-    const kickParticipant = (targetSocketId) => {
+    const kickParticipant = useCallback((targetSocketId) => {
         socket.emit("kick-user", { roomId, targetSocketId });
-        toast("Participant removed from meeting");
-    };
+        toast.success("Removed participant from meeting");
+    }, [roomId]);
 
-    const toggleLockMeeting = () => {
+    const toggleLockMeeting = useCallback(() => {
         const nextState = !isRoomLocked;
         setIsRoomLocked(nextState);
         socket.emit("toggle-lock-meeting", { roomId, isLocked: nextState });
-    };
+    }, [isRoomLocked, roomId]);
 
-    const toggleWaitingRoom = () => {
+    const toggleWaitingRoom = useCallback(() => {
         const nextState = !isWaitingRoomEnabled;
         setIsWaitingRoomEnabled(nextState);
         socket.emit("toggle-waiting-room", { roomId, isWaitingRoomEnabled: nextState });
-    };
+        toast.success(nextState ? "Waiting Room enabled 🛡️" : "Waiting Room disabled");
+    }, [isWaitingRoomEnabled, roomId]);
 
-    const admitUser = (targetSocketId) => {
+    const admitUser = useCallback((targetSocketId) => {
         socket.emit("admit-user", { roomId, targetSocketId });
-        setWaitingUsers((prev) => prev.filter((u) => u.socketId !== targetSocketId));
-        toast.success("Admitted participant");
-    };
-
-    const denyUser = (targetSocketId) => {
-        socket.emit("deny-user", { roomId, targetSocketId });
-        setWaitingUsers((prev) => prev.filter((u) => u.socketId !== targetSocketId));
-        toast("Denied participant access");
-    };
-
-    // ====================================================
-    // AUDIO / VIDEO TOGGLES
-    // ====================================================
-    const toggleAudio = () => {
-        if (localStreamRef.current) {
-            const audioTrack = localStreamRef.current.getAudioTracks()[0];
-            if (audioTrack) {
-                const newState = !audioEnabled;
-                audioTrack.enabled = newState;
-                setAudioEnabled(newState);
-                socket.emit("toggle-audio", { roomId, audioEnabled: newState });
-            }
-        }
-    };
-
-    const toggleVideo = () => {
-        if (localStreamRef.current) {
-            const videoTrack = localStreamRef.current.getVideoTracks()[0];
-            if (videoTrack) {
-                const newState = !videoEnabled;
-                videoTrack.enabled = newState;
-                setVideoEnabled(newState);
-                socket.emit("toggle-video", { roomId, videoEnabled: newState });
-            }
-        }
-    };
-
-    // End meeting (Host action)
-    const endMeeting = useCallback(() => {
-        if (roomId) {
-            socket.emit("end-meeting", { roomId });
-        }
+        toast.success("Participant admitted to call! 🚪");
     }, [roomId]);
+
+    const denyUser = useCallback((targetSocketId) => {
+        socket.emit("deny-user", { roomId, targetSocketId });
+        toast.success("Participant denied");
+    }, [roomId]);
+
+    const endMeeting = useCallback(() => {
+        socket.emit("end-meeting", { roomId });
+        if (onMeetingEnded) {
+            onMeetingEnded("You have ended the meeting session.");
+        }
+    }, [onMeetingEnded, roomId]);
 
     return {
         localStream,
