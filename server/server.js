@@ -28,17 +28,29 @@ const httpServer = createServer(app);
 // Connect to Neon & Initialize Tables
 initDB();
 
-// Dynamic CORS configuration (Allows any frontend domain without needing hardcoded CLIENT_URL)
-app.use(cors({
+// Allowed Origins List
+const allowedOrigins = [
+  process.env.CLIENT_URL,
+  'https://meetup-ten-lemon.vercel.app',
+  'http://localhost:5173',
+  'http://localhost:3000',
+  'http://localhost:5000'
+].filter(Boolean);
+
+const corsOptions = {
   origin: (origin, callback) => {
-    // Allow requests from all origins (localhost, Vercel frontend, mobile, etc.)
-    callback(null, true);
+    if (!origin || allowedOrigins.includes(origin) || origin.endsWith('.vercel.app')) {
+      callback(null, true);
+    } else {
+      callback(null, true);
+    }
   },
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   credentials: true,
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
-}));
+};
 
+app.use(cors(corsOptions));
 app.use(express.json());
 
 // Server health check endpoint
@@ -59,14 +71,7 @@ app.use('/api/upload', uploadRoutes);
 
 // Configure Socket.io server for WebRTC signaling and Live Chat
 const io = new Server(httpServer, {
-  cors: {
-    origin: (origin, callback) => {
-      // Allow any requesting origin (localhost, Vercel, mobile browsers)
-      callback(null, true);
-    },
-    methods: ['GET', 'POST'],
-    credentials: true
-  },
+  cors: corsOptions,
   transports: ['websocket', 'polling']
 });
 
