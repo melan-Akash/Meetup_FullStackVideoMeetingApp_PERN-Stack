@@ -3,11 +3,11 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-const EMAIL_USER = process.env.EMAIL_USER || 'melonakash2002@gmail.com';
-const EMAIL_PASS = process.env.EMAIL_PASS || 'srzlfpcpjeoivmbo';
+const EMAIL_USER = process.env.EMAIL_USER;
+const EMAIL_PASS = process.env.EMAIL_PASS;
 const SMTP_HOST = process.env.SMTP_HOST || 'smtp.gmail.com';
 const SMTP_PORT = parseInt(process.env.SMTP_PORT || '587', 10);
-const CLIENT_URL = process.env.CLIENT_URL || 'http://localhost:5173';
+const DEFAULT_CLIENT_URL = process.env.CLIENT_URL || 'http://localhost:5173';
 
 // Create Nodemailer Transporter using createTransport
 export const transporter = nodemailer.createTransport({
@@ -33,88 +33,76 @@ const emailWrapper = (content) => `
     body {
       margin: 0;
       padding: 0;
-      background-color: #f1f5f9;
+      background-color: #f8fafc;
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-      color: #0f172a;
+      color: #1e293b;
     }
-    .container {
-      max-width: 580px;
-      margin: 30px auto;
+    .wrapper {
+      max-width: 600px;
+      margin: 20px auto;
       background: #ffffff;
+      border: 1px solid #e2e8f0;
       border-radius: 24px;
       overflow: hidden;
-      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.01);
-      border: 1px solid #e2e8f0;
+      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05);
     }
     .header {
       background: linear-gradient(135deg, #0055ff 0%, #3b82f6 100%);
-      padding: 36px 30px;
+      padding: 30px 40px;
       text-align: center;
       color: #ffffff;
     }
-    .logo-badge {
-      display: inline-block;
-      background: rgba(255, 255, 255, 0.2);
-      backdrop-filter: blur(10px);
-      padding: 6px 16px;
-      border-radius: 9999px;
-      font-size: 13px;
-      font-weight: 700;
-      letter-spacing: 1px;
-      text-transform: uppercase;
-      margin-bottom: 12px;
-      border: 1px solid rgba(255, 255, 255, 0.3);
-    }
-    .header h1 {
-      margin: 0;
+    .logo {
       font-size: 24px;
       font-weight: 800;
       letter-spacing: -0.5px;
+      margin: 0;
     }
-    .body {
-      padding: 36px 30px;
+    .body-content {
+      padding: 35px 40px;
     }
     .card {
-      background: #f8fafc;
+      background: #f1f5f9;
       border: 1px solid #e2e8f0;
-      border-radius: 18px;
-      padding: 22px;
-      margin: 24px 0;
+      border-radius: 16px;
+      padding: 20px;
+      margin: 20px 0;
     }
     .btn {
       display: inline-block;
       background: #0055ff;
       color: #ffffff !important;
       text-decoration: none;
-      padding: 14px 32px;
-      border-radius: 16px;
+      padding: 14px 28px;
       font-size: 14px;
       font-weight: 700;
-      text-align: center;
-      box-shadow: 0 4px 12px rgba(0, 85, 255, 0.3);
+      border-radius: 14px;
+      box-shadow: 0 4px 14px rgba(0, 85, 255, 0.35);
     }
     .footer {
-      background: #f8fafc;
-      padding: 24px;
       text-align: center;
+      padding: 20px 40px;
       font-size: 12px;
-      color: #64748b;
-      border-top: 1px solid #e2e8f0;
+      color: #94a3b8;
+      border-top: 1px solid #f1f5f9;
+      background-color: #fafbfc;
     }
   </style>
 </head>
 <body>
-  <div class="container">
+  <div class="wrapper">
     <div class="header">
-      <div class="logo-badge">MeetUp Video</div>
-      <h1>HD Video Conference</h1>
+      <h1 class="logo">MeetUp<span style="color: #93c5fd;">.</span></h1>
+      <p style="margin: 6px 0 0 0; font-size: 13px; opacity: 0.9;">Next-Gen Video Collaboration</p>
     </div>
-    <div class="body">
+    
+    <div class="body-content">
       ${content}
     </div>
+
     <div class="footer">
-      <p style="margin: 0;">Protected with end-to-end WebRTC encryption.</p>
-      <p style="margin: 6px 0 0 0;">© 2026 MeetUp Inc. All rights reserved.</p>
+      <p style="margin: 0 0 8px 0;">This email was sent from your MeetUp Video Conference service.</p>
+      <p style="margin: 0;">© ${new Date().getFullYear()} MeetUp Inc. All rights reserved.</p>
     </div>
   </div>
 </body>
@@ -131,9 +119,11 @@ export const sendMeetingInvite = async ({
   scheduledAt,
   duration = 30,
   description = '',
-  hostName = 'Great Stack'
+  hostName = 'Great Stack',
+  clientUrl
 }) => {
-  const meetingLink = `${CLIENT_URL}/meeting/${meetingId}`;
+  const base = clientUrl || DEFAULT_CLIENT_URL;
+  const meetingLink = `${base}/meeting/${meetingId}`;
   const formattedDate = new Date(scheduledAt).toLocaleString('en-US', {
     weekday: 'long',
     month: 'short',
@@ -208,9 +198,11 @@ export const sendMeetingInvite = async ({
 export const sendInstantInvite = async ({
   recipientEmail,
   meetingId,
-  hostName = 'Host'
+  hostName = 'Host',
+  clientUrl
 }) => {
-  const meetingLink = `${CLIENT_URL}/meeting/${meetingId}`;
+  const base = clientUrl || DEFAULT_CLIENT_URL;
+  const meetingLink = `${base}/meeting/${meetingId}`;
 
   const content = `
     <h2 style="font-size: 20px; font-weight: 700; color: #0f172a; margin-top: 0;">
@@ -250,9 +242,11 @@ export const sendInstantInvite = async ({
  */
 export const sendWelcomeEmail = async ({
   email,
-  fullName = 'User'
+  fullName = 'User',
+  clientUrl
 }) => {
-  const dashboardLink = `${CLIENT_URL}/dashboard`;
+  const base = clientUrl || DEFAULT_CLIENT_URL;
+  const dashboardLink = `${base}/dashboard`;
 
   const content = `
     <h2 style="font-size: 20px; font-weight: 700; color: #0f172a; margin-top: 0;">
@@ -263,26 +257,26 @@ export const sendWelcomeEmail = async ({
     </p>
 
     <div class="card">
-      <div style="font-size: 14px; font-weight: 700; color: #0f172a; margin-bottom: 10px;">
-        What you can do with MeetUp:
+      <div style="font-weight: 700; color: #0f172a; font-size: 14px; margin-bottom: 10px;">
+        Quick Start Features:
       </div>
-      <ul style="font-size: 13px; color: #475569; padding-left: 20px; margin: 0; line-height: 1.8;">
-        <li>Host instant and scheduled video meetings with zero delay</li>
-        <li>Collaborate with real-time Whiteboard & live notes</li>
-        <li>Share screens, record meetings, and chat seamlessly</li>
-        <li>Enjoy end-to-end peer-to-peer security</li>
+      <ul style="padding-left: 20px; margin: 0; font-size: 13px; color: #475569; line-height: 1.8;">
+        <li>🚀 Start or schedule meetings with a single click</li>
+        <li>🤖 AI-Powered meeting summarization and real-time translation</li>
+        <li>🎨 Interactive multi-user collaborative Whiteboard</li>
+        <li>🔒 Secure WebRTC encrypted peer-to-peer streams</li>
       </ul>
     </div>
 
     <div style="text-align: center; margin: 30px 0;">
-      <a href="${dashboardLink}" class="btn" target="_blank">Go to My Dashboard</a>
+      <a href="${dashboardLink}" class="btn" target="_blank">Go to Dashboard</a>
     </div>
   `;
 
   const mailOptions = {
     from: `"MeetUp Video" <${EMAIL_USER}>`,
     to: email,
-    subject: `Welcome to MeetUp HD Video, ${fullName}! 🚀`,
+    subject: `🎉 Welcome to MeetUp - Start Collaborating`,
     html: emailWrapper(content),
   };
 
