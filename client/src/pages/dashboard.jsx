@@ -4,6 +4,7 @@ import { Plus, Calendar, Keyboard, ArrowRight, Shield, Clock, Copy, Check, Video
 import { useMockAuth } from '../context/AuthContext';
 import api from '../config/api';
 import ScheduleModal from '../components/meeting/schedule modal.jsx';
+import NewMeetingModal from '../components/meeting/new meeting modal.jsx';
 import { toast } from 'react-hot-toast';
 
 export default function Dashboard() {
@@ -12,7 +13,8 @@ export default function Dashboard() {
   const [meetingID, setMeetingID] = useState('');
   const [time, setTime] = useState(new Date());
   
-  // Schedule Modal State
+  // Modals State
+  const [isNewMeetingOpen, setIsNewMeetingOpen] = useState(false);
   const [isScheduleOpen, setIsScheduleOpen] = useState(false);
   const [upcomingMeetings, setUpcomingMeetings] = useState([]);
   const [copiedMap, setCopiedMap] = useState({});
@@ -40,57 +42,33 @@ export default function Dashboard() {
     fetchUpcoming();
   }, [user]);
 
-  const generateMeetingID = () => {
-    const part = () => Math.random().toString(36).substring(2, 5);
-    return `${part()}-${part()}-${part()}`;
-  };
-
-  const handleCreateMeeting = async () => {
-    const id = generateMeetingID();
-    toast.success("Creating meeting room...");
-
-    try {
-      await api.post('/meetings/create', {
-        meetingID: id,
-        title: `${user?.fullName || 'Great Stack'}'s Meeting`,
-        hostID: user?.id || 'user_mock_001'
-      });
-    } catch (err) {
-      console.warn("Backend meeting create warning:", err.message);
-    }
-
-    navigate(`/meeting/${id}`);
-  };
-
-  const handleJoinMeeting = async (e) => {
+  const handleJoinMeeting = (e) => {
     e.preventDefault();
-    if (!meetingID.trim()) return;
-    const cleanID = meetingID.trim().replace(/\s+/g, '');
-    toast.success("Joining meeting room...");
-
-    try {
-      await api.post('/meetings/join-log', {
-        meetingID: cleanID,
-        userID: user?.id || 'user_mock_001'
-      });
-    } catch (err) {
-      console.warn("Backend join-log warning:", err.message);
+    const cleanId = meetingID.trim();
+    if (!cleanId) {
+      toast.error("Please enter a meeting code");
+      return;
     }
-
-    navigate(`/meeting/${cleanID}`);
+    navigate(`/meeting/${cleanId}`);
   };
 
   const handleCopyLink = (mId) => {
     const link = `${window.location.origin}/meeting/${mId}`;
     navigator.clipboard.writeText(link);
-    setCopiedMap(prev => ({ ...prev, [mId]: true }));
+    setCopiedMap((prev) => ({ ...prev, [mId]: true }));
     toast.success("Meeting link copied!");
     setTimeout(() => {
-      setCopiedMap(prev => ({ ...prev, [mId]: false }));
+      setCopiedMap((prev) => ({ ...prev, [mId]: false }));
     }, 2000);
   };
 
-  // Date formatted: "Tuesday, Aug 25, 2026"
+  // Format Time & Date for the clock card
+  const formattedTime = time.toLocaleTimeString('en-US', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: true
+  });
+
   const formattedDate = time.toLocaleDateString('en-US', {
     weekday: 'long',
     month: 'short',
@@ -98,32 +76,22 @@ export default function Dashboard() {
     year: 'numeric'
   });
 
-  // Time formatted: "04:13 PM"
-  const formattedTime = time.toLocaleTimeString('en-US', {
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: true
-  });
-
-  const displayName = user?.fullName || 'Great Stack';
-  const displayEmail = user?.email || 'user.greatstack@gmail.com';
-
   return (
-    <div className="space-y-12 py-6 lg:py-12 max-w-7xl mx-auto">
+    <div className="space-y-8 animate-in fade-in duration-200 py-4 max-w-7xl mx-auto">
       
-      {/* ================= HERO SECTION (2 COLUMNS) ================= */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
+      {/* Top Banner Section: Left Typography + Right Live Clock */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-center">
         
-        {/* LEFT COLUMN: Hero Copy & Actions */}
-        <div className="lg:col-span-7 flex flex-col justify-center space-y-6">
+        {/* Left 7 Columns: Hero Brand Headings */}
+        <div className="lg:col-span-7 space-y-4">
           
-          {/* Top Badge */}
-          <div className="w-fit flex items-center gap-2 px-3 py-1 rounded-full bg-white/70 backdrop-blur-md border border-white/80 text-[11px] font-medium text-slate-600 shadow-2xs">
-            <Shield className="w-3.5 h-3.5 text-slate-500" />
+          {/* Subtle Security Pill */}
+          <div className="inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full bg-white/80 border border-slate-200/80 text-slate-600 text-xs font-semibold shadow-2xs">
+            <Shield className="w-3.5 h-3.5 text-blue-600" />
             <span>Secure Peer-to-Peer Encryption</span>
           </div>
 
-          {/* Hero Title */}
+          {/* Main Hero Typography */}
           <div className="space-y-1">
             <h1 className="text-4xl sm:text-5xl lg:text-[54px] font-bold text-slate-900 tracking-tight leading-[1.15]">
               High quality video calls.
@@ -141,9 +109,9 @@ export default function Dashboard() {
           {/* Action Controls Row */}
           <div className="pt-2 flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 max-w-2xl flex-wrap">
             
-            {/* Blue + New Meeting Button */}
+            {/* Blue + New Meeting Button (Opens NewMeetingModal for Title & Description) */}
             <button
-              onClick={handleCreateMeeting}
+              onClick={() => setIsNewMeetingOpen(true)}
               className="flex items-center justify-center gap-2 px-5 py-3 rounded-full bg-[#0055ff] hover:bg-blue-700 text-white font-semibold text-xs sm:text-sm shadow-md shadow-blue-500/20 hover:shadow-blue-500/30 transition-all cursor-pointer shrink-0"
             >
               <Plus className="w-4 h-4" />
@@ -170,15 +138,14 @@ export default function Dashboard() {
                 placeholder="Enter meeting code (e.g. abc-def-ghi)"
                 value={meetingID}
                 onChange={(e) => setMeetingID(e.target.value)}
-                className="grow bg-transparent text-xs text-slate-800 placeholder-slate-400 outline-none px-1"
+                className="grow bg-transparent text-xs text-slate-800 placeholder-slate-400 outline-none px-1 font-medium"
               />
               <button
                 type="submit"
-                disabled={!meetingID.trim()}
-                className="flex items-center gap-1.5 px-4 py-2 rounded-full bg-[#64748b] hover:bg-slate-700 disabled:bg-slate-300 disabled:text-slate-500 text-white text-xs font-semibold transition-all cursor-pointer shrink-0"
+                className="px-3.5 py-2 bg-slate-100/90 hover:bg-slate-200/80 text-slate-700 hover:text-slate-900 font-semibold text-xs rounded-full transition-colors flex items-center gap-1 cursor-pointer shrink-0"
               >
                 <span>Join</span>
-                <ArrowRight className="w-3.5 h-3.5" />
+                <ArrowRight className="w-3 h-3" />
               </button>
             </form>
 
@@ -186,46 +153,43 @@ export default function Dashboard() {
 
         </div>
 
-        {/* RIGHT COLUMN: Frosted Glass Clock Card */}
-        <div className="lg:col-span-5 flex justify-center lg:justify-end">
-          <div className="bg-white/65 backdrop-blur-xl border border-white/90 rounded-4xl p-8 sm:p-10 w-full max-w-md flex flex-col justify-between space-y-7 shadow-lg shadow-blue-900/5">
+        {/* Right 5 Columns: Modern Frosted Live Time & Status Card */}
+        <div className="lg:col-span-5">
+          <div className="bg-white/70 backdrop-blur-2xl border border-white/90 rounded-4xl p-6 sm:p-8 shadow-sm hover:shadow-md transition-shadow">
             
-            {/* Greeting */}
-            <h3 className="text-sm font-semibold text-slate-800">
-              Hi, {displayName}
-            </h3>
+            {/* User Greeting */}
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-slate-500">
+                Hi, {user?.fullName || 'Great Stack'}
+              </span>
+            </div>
 
-            {/* Large Clock Display */}
-            <div className="text-center my-1">
-              <h2 className="text-6xl sm:text-[64px] font-light text-slate-900 tracking-tight font-sans">
+            {/* Big Live Clock */}
+            <div className="py-5 text-center sm:text-left">
+              <div className="text-4xl sm:text-5xl font-mono font-bold text-slate-800 tracking-tight">
                 {formattedTime}
-              </h2>
-              <p className="text-xs text-slate-500 mt-1 font-medium">
+              </div>
+              <p className="text-xs text-slate-400 font-medium mt-1">
                 {formattedDate}
               </p>
             </div>
 
-            {/* Bottom Logged In & Stats Row */}
-            <div className="space-y-3 pt-2">
-              
-              {/* User Logged in as + Badge */}
-              <div className="flex items-center justify-between gap-2 text-xs text-slate-600 px-1 font-normal">
-                <span className="truncate">
-                  Logged in as: <span className="text-slate-800">{displayEmail}</span>
-                </span>
-                <span className="px-2.5 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider bg-[#0055ff] text-white shrink-0">
-                  {user?.plan || 'PREMIUM'}
+            {/* Bottom Status Info Pill */}
+            <div className="pt-4 border-t border-slate-100 flex items-center justify-between text-xs">
+              <div className="flex items-center gap-1.5 text-slate-500">
+                <span className="truncate max-w-44">
+                  Logged in as: <strong className="text-slate-700">{user?.email || 'kau@gmail.com'}</strong>
                 </span>
               </div>
+              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-blue-50 text-blue-600 border border-blue-100">
+                {user?.plan || 'Free'}
+              </span>
+            </div>
 
-              {/* Monthly Meetings Stats Pill */}
-              <div className="bg-white/60 border border-white/80 rounded-2xl px-4 py-3 flex items-center justify-between text-xs text-slate-600 font-normal shadow-2xs">
-                <span>Monthly Meetings</span>
-                <span className="text-slate-800 font-medium">
-                  {upcomingMeetings.length + 3} Created (Unlimited)
-                </span>
-              </div>
-
+            {/* Monthly Meetings stats */}
+            <div className="mt-3 pt-3 border-t border-slate-100/80 flex items-center justify-between text-[11px] text-slate-500">
+              <span>Monthly Meetings</span>
+              <span className="font-semibold text-slate-700">Unlimited (Free Tier)</span>
             </div>
 
           </div>
@@ -233,19 +197,18 @@ export default function Dashboard() {
 
       </div>
 
-      {/* ================= UPCOMING SCHEDULED MEETINGS ================= */}
+      {/* ================= UPCOMING SCHEDULED MEETINGS SECTION ================= */}
       {upcomingMeetings.length > 0 && (
-        <div className="space-y-4 pt-4 border-t border-white/60">
+        <div className="space-y-4 pt-2">
+          
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
+            <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
               <Calendar className="w-4 h-4 text-blue-600" />
-              <h2 className="text-base font-bold text-slate-900">
-                Upcoming Scheduled Meetings ({upcomingMeetings.length})
-              </h2>
-            </div>
+              <span>Upcoming Scheduled Meetings ({upcomingMeetings.length})</span>
+            </h3>
             <button
               onClick={() => setIsScheduleOpen(true)}
-              className="text-xs font-semibold text-blue-600 hover:text-blue-700 cursor-pointer"
+              className="text-xs font-semibold text-blue-600 hover:underline cursor-pointer"
             >
               + Schedule another
             </button>
@@ -254,36 +217,36 @@ export default function Dashboard() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {upcomingMeetings.map((m) => {
               const isCopied = copiedMap[m.id];
-              const dateStr = new Date(m.scheduled_at).toLocaleString('en-US', {
-                month: 'short',
-                day: 'numeric',
-                hour: '2-digit',
-                minute: '2-digit'
-              });
-
               return (
-                <div 
+                <div
                   key={m.id}
-                  className="bg-white/75 backdrop-blur-xl border border-white/90 rounded-3xl p-5 shadow-2xs hover:shadow-sm transition-all flex flex-col justify-between space-y-4"
+                  className="bg-white/80 backdrop-blur-xl border border-white/90 rounded-3xl p-5 shadow-xs hover:shadow-md transition-all flex flex-col justify-between space-y-4"
                 >
+                  {/* Top: Scheduled Time & ID */}
                   <div>
-                    {/* Top Row: Date Badge & Duration */}
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold bg-blue-50 text-blue-600 border border-blue-100">
+                    <div className="flex items-center justify-between text-xs text-slate-400">
+                      <span className="flex items-center gap-1 text-blue-600 font-semibold bg-blue-50/80 px-2.5 py-0.5 rounded-full text-[11px]">
                         <Clock className="w-3 h-3" />
-                        <span>{dateStr}</span>
+                        {new Date(m.scheduled_at).toLocaleString('en-US', {
+                          month: 'short',
+                          day: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit'
+                        })}
                       </span>
-                      <span className="text-[10px] text-slate-400 font-medium font-mono">
+                      <span className="font-mono text-[10px] text-slate-400">
                         ID: {m.id}
                       </span>
                     </div>
 
-                    {/* Title & Description */}
-                    <h3 className="text-sm font-bold text-slate-900 mt-2.5 leading-snug">
-                      {m.title}
-                    </h3>
+                    {/* Title */}
+                    <h4 className="font-bold text-slate-900 text-sm mt-2.5 leading-snug">
+                      {m.title || 'Scheduled Meeting'}
+                    </h4>
+
+                    {/* Description if present */}
                     {m.description && (
-                      <p className="text-xs text-slate-500 mt-1 line-clamp-2">
+                      <p className="text-xs text-slate-500 mt-1 line-clamp-2 leading-relaxed">
                         {m.description}
                       </p>
                     )}
@@ -314,7 +277,14 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* Schedule Meeting Modal */}
+      {/* 1. New Meeting Title/Description Modal */}
+      <NewMeetingModal
+        isOpen={isNewMeetingOpen}
+        onClose={() => setIsNewMeetingOpen(false)}
+        user={user}
+      />
+
+      {/* 2. Schedule Meeting Modal */}
       <ScheduleModal
         isOpen={isScheduleOpen}
         onClose={() => setIsScheduleOpen(false)}

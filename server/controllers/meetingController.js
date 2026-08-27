@@ -5,7 +5,7 @@ import pool from '../config/db.js';
  * Route: POST /api/meetings/create
  */
 export const createMeeting = async (req, res) => {
-  const { meetingID, title, hostID } = req.body;
+  const { meetingID, title, description, hostID } = req.body;
 
   if (!meetingID || !hostID) {
     return res.status(400).json({ error: "Missing meetingID or hostID details" });
@@ -13,8 +13,8 @@ export const createMeeting = async (req, res) => {
 
   try {
     const result = await pool.query(
-      "INSERT INTO meetings (id, title, host_id, status) VALUES ($1, $2, $3, 'active') RETURNING *",
-      [meetingID, title || 'Instant Meeting', hostID]
+      "INSERT INTO meetings (id, title, description, host_id, status) VALUES ($1, $2, $3, $4, 'active') RETURNING *",
+      [meetingID, title || 'Instant Meeting', description || null, hostID]
     );
     res.status(201).json(result.rows[0]);
   } catch (err) {
