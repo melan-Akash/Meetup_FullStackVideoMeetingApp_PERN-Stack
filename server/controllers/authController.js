@@ -20,7 +20,7 @@ const generateToken = (user) => {
  * Route: POST /api/auth/register
  */
 export const handleRegister = async (req, res) => {
-  const { fullName, email, password, nickname } = req.body;
+  const { fullName, email, password, nickname, imageUrl } = req.body;
   const displayName = fullName || nickname || 'User';
 
   if (!email || !email.trim()) {
@@ -34,23 +34,18 @@ export const handleRegister = async (req, res) => {
   const cleanEmail = email.trim().toLowerCase();
 
   try {
-    // 1. Check if user with this email already exists
     const existingUser = await pool.query("SELECT * FROM users WHERE LOWER(email) = $1", [cleanEmail]);
     if (existingUser.rows.length > 0) {
       return res.status(400).json({ error: "An account with this email already exists. Please sign in." });
     }
 
-    // 2. Hash password with bcryptjs
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
-
-    // 3. Create unique user ID
     const userId = `user_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
 
-    // 4. Insert new user into database
     const insertResult = await pool.query(
-      "INSERT INTO users (id, fullname, email, password, plan) VALUES ($1, $2, $3, $4, 'Free') RETURNING id, fullname, email, plan, created_at",
-      [userId, displayName, cleanEmail, hashedPassword]
+      "INSERT INTO users (id, fullname, email, password, nickname, image_url, plan) VALUES ($1, $2, $3, $4, $5, $6, 'Free') RETURNING id, fullname, email, plan, nickname, image_url, created_at",
+      [userId, displayName, cleanEmail, hashedPassword, nickname || displayName, imageUrl || null]
     );
 
     const newUser = insertResult.rows[0];
@@ -65,7 +60,9 @@ export const handleRegister = async (req, res) => {
         fullName: newUser.fullname,
         name: newUser.fullname,
         email: newUser.email,
-        plan: newUser.plan
+        plan: newUser.plan,
+        nickname: newUser.nickname,
+        imageUrl: newUser.image_url
       }
     });
   } catch (err) {
@@ -81,7 +78,6 @@ export const handleRegister = async (req, res) => {
 export const handleLogin = async (req, res) => {
   const { email, password, id, fullName } = req.body;
 
-  // Guest / Auto-sync fallback if no password passed
   if (!password && (id || email)) {
     return handleGuestLogin(req, res);
   }
@@ -93,7 +89,6 @@ export const handleLogin = async (req, res) => {
   const cleanEmail = email.trim().toLowerCase();
 
   try {
-    // 1. Lookup user by email
     const result = await pool.query("SELECT * FROM users WHERE LOWER(email) = $1", [cleanEmail]);
     if (result.rows.length === 0) {
       return res.status(401).json({ error: "No account found with this email. Please register." });
@@ -101,7 +96,6 @@ export const handleLogin = async (req, res) => {
 
     const user = result.rows[0];
 
-    // 2. Verify password
     if (user.password) {
       const isMatch = await bcrypt.compare(password, user.password);
       if (!isMatch) {
@@ -109,7 +103,6 @@ export const handleLogin = async (req, res) => {
       }
     }
 
-    // 3. Issue JWT Token
     const token = generateToken(user);
 
     return res.status(200).json({
@@ -120,7 +113,10 @@ export const handleLogin = async (req, res) => {
         fullName: user.fullname,
         name: user.fullname,
         email: user.email,
-        plan: user.plan
+        plan: user.plan,
+        nickname: user.nickname,
+        imageUrl: user.image_url,
+        bio: user.bio
       }
     });
   } catch (err) {
@@ -133,7 +129,7 @@ export const handleLogin = async (req, res) => {
  * Handles guest user profile sync
  */
 export const handleGuestLogin = async (req, res) => {
-  const { id, fullName, email } = req.body;
+  const { id, fullName, email, imageUrl } = req.body;
   const userId = id || `guest_${Date.now()}`;
   const userName = fullName || 'Great Stack';
   const userEmail = email || `${userName.toLowerCase().replace(/\s+/g, '')}@guest.local`;
@@ -147,13 +143,14 @@ export const handleGuestLogin = async (req, res) => {
         token,
         ...existing,
         fullName: existing.fullname,
-        name: existing.fullname
+        name: existing.fullname,
+        imageUrl: existing.image_url
       });
     }
 
     const result = await pool.query(
-      "INSERT INTO users (id, fullname, email, plan) VALUES ($1, $2, $3, 'Free') RETURNING *",
-      [userId, userName, userEmail]
+      "INSERT INTO users (id, fullname, email, image_url, plan) VALUES ($1, $2, $3, $4, 'Free') RETURNING *",
+      [userId, userName, userEmail, imageUrl || null]
     );
     const created = result.rows[0];
     const token = generateToken(created);
@@ -162,11 +159,61 @@ export const handleGuestLogin = async (req, res) => {
       token,
       ...created,
       fullName: created.fullname,
-      name: created.fullname
+      name: created.fullname,
+      imageUrl: created.image_url
     });
   } catch (err) {
     console.error("Error inside guest login controller:", err);
     return res.status(500).json({ error: "Internal database transaction failed" });
+  }
+};
+
+/**
+ * Updates User Profile with Cloudinary Avatar, Nickname, Bio
+ * Route: PUT /api/auth/profile
+ */
+export const handleUpdateProfile = async (req, res) => {
+  const { id, fullName, nickname, imageUrl, bio } = req.body;
+
+  if (!id) {
+    return res.status(400).json({ error: "User ID is required" });
+  }
+
+  try {
+    const result = await pool.query(
+      `UPDATE users 
+       SET fullname = COALESCE($1, fullname),
+           nickname = COALESCE($2, nickname),
+           image_url = COALESCE($3, image_url),
+           bio = COALESCE($4, bio),
+           updated_at = NOW()
+       WHERE id = $5 
+       RETURNING id, fullname, email, plan, nickname, image_url, bio`,
+      [fullName, nickname, imageUrl, bio, id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    const updated = result.rows[0];
+    return res.status(200).json({
+      success: true,
+      message: "Profile updated successfully",
+      user: {
+        id: updated.id,
+        fullName: updated.fullname,
+        name: updated.fullname,
+        email: updated.email,
+        plan: updated.plan,
+        nickname: updated.nickname,
+        imageUrl: updated.image_url,
+        bio: updated.bio
+      }
+    });
+  } catch (err) {
+    console.error("Error updating profile in db:", err);
+    return res.status(500).json({ error: "Failed to update profile", details: err.message });
   }
 };
 
@@ -211,7 +258,7 @@ export const handleGetCurrentUser = async (req, res) => {
   const token = authHeader.split(' ')[1];
   try {
     const decoded = jwt.verify(token, JWT_SECRET);
-    const result = await pool.query("SELECT id, fullname, email, plan FROM users WHERE id = $1", [decoded.id]);
+    const result = await pool.query("SELECT id, fullname, email, plan, nickname, image_url, bio FROM users WHERE id = $1", [decoded.id]);
     if (result.rows.length === 0) {
       return res.status(404).json({ error: "User not found" });
     }
@@ -221,7 +268,10 @@ export const handleGetCurrentUser = async (req, res) => {
       fullName: user.fullname,
       name: user.fullname,
       email: user.email,
-      plan: user.plan
+      plan: user.plan,
+      nickname: user.nickname,
+      imageUrl: user.image_url,
+      bio: user.bio
     });
   } catch (err) {
     return res.status(401).json({ error: "Invalid or expired token" });

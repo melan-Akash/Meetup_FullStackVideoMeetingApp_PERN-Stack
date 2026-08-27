@@ -33,6 +33,7 @@ export default function VideoGrid({
         isLocal={true}
         audioEnabled={audioEnabled}
         videoEnabled={videoEnabled}
+        avatarUrl={localUser?.imageUrl || localUser?.image}
         isHandRaised={isLocalHandRaised}
         isScreenSharing={isLocalScreenSharing}
         virtualBackground={virtualBackground}
@@ -47,6 +48,7 @@ export default function VideoGrid({
           isLocal={false}
           audioEnabled={user.audioEnabled}
           videoEnabled={user.videoEnabled}
+          avatarUrl={user.avatarUrl || user.imageUrl || user.image}
           isHandRaised={user.isHandRaised}
           isScreenSharing={user.isScreenSharing}
         />

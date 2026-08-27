@@ -50,7 +50,7 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   // 1. Register with Password & JWT + Send Welcome Email
-  const register = async (fullName, email, password, nickname) => {
+  const register = async (fullName, email, password, nickname, imageUrl = '') => {
     const displayName = (fullName || nickname || 'User').trim();
     const userEmail = email.trim().toLowerCase();
 
@@ -59,7 +59,8 @@ export const AuthProvider = ({ children }) => {
         fullName: displayName,
         email: userEmail,
         password: password,
-        nickname: nickname || displayName
+        nickname: nickname || displayName,
+        imageUrl: imageUrl || null
       });
 
       if (res.data && res.data.token) {
@@ -140,6 +141,26 @@ export const AuthProvider = ({ children }) => {
     return profile;
   };
 
+  // 4. Update Profile (Name, Nickname, Cloudinary Avatar, Bio)
+  const updateProfile = async ({ fullName, nickname, imageUrl, bio }) => {
+    if (!user) return;
+
+    const res = await api.put('/auth/profile', {
+      id: user.id,
+      fullName,
+      nickname,
+      imageUrl,
+      bio
+    });
+
+    if (res.data && res.data.user) {
+      const updated = { ...user, ...res.data.user };
+      setUser(updated);
+      localStorage.setItem('meeting_guest', JSON.stringify(updated));
+      return updated;
+    }
+  };
+
   // Logout
   const logout = () => {
     localStorage.removeItem('meetup_token');
@@ -172,6 +193,7 @@ export const AuthProvider = ({ children }) => {
       login, 
       register, 
       loginWithEmail, 
+      updateProfile, 
       logout, 
       updatePlan 
     }}>

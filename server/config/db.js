@@ -30,16 +30,21 @@ export async function initDB() {
         fullname VARCHAR(255) NOT NULL,
         email VARCHAR(255) NOT NULL UNIQUE,
         password VARCHAR(255),
-        image VARCHAR(500),
+        image_url TEXT,
+        nickname VARCHAR(100),
+        bio TEXT,
         plan VARCHAR(20) DEFAULT 'Free',
         created_at TIMESTAMPTZ DEFAULT NOW(),
         updated_at TIMESTAMPTZ DEFAULT NOW()
       );
     `);
 
-    // Ensure password column exists if table already existed
+    // Ensure columns exist if table already existed
     await pool.query(`
       ALTER TABLE users ADD COLUMN IF NOT EXISTS password VARCHAR(255);
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS image_url TEXT;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS nickname VARCHAR(100);
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS bio TEXT;
     `);
 
     // 2. Meetings Table
@@ -89,7 +94,7 @@ export async function initDB() {
       );
     `);
 
-    console.log("Database initialized successfully");
+    console.log("Database initialized successfully with Cloudinary profile columns");
   } catch (error) {
     console.error("Error initializing database:", error);
     throw error;

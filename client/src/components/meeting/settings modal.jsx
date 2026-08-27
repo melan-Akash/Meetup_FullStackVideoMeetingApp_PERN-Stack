@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   X, Video, Mic, Wifi, Sparkles, Check, 
-  Volume2, ShieldCheck, Activity, Sliders 
+  Volume2, ShieldCheck, Activity, Sliders, Plus, Loader2 
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { useAudioLevel } from '../../hooks/use audio level.js';
+import api from '../../config/api';
 
 export const VIRTUAL_BACKGROUNDS = [
   { id: 'none', label: 'None', preview: 'bg-slate-200' },
@@ -25,7 +26,11 @@ export default function SettingsModal({
   onToggleNoiseSuppression
 }) {
   const [activeTab, setActiveTab] = useState('video'); // 'video' | 'audio' | 'network'
+  const [customBackgrounds, setCustomBackgrounds] = useState([]);
+  const [isUploadingBg, setIsUploadingBg] = useState(false);
+  
   const videoPreviewRef = useRef(null);
+  const bgFileInputRef = useRef(null);
   const { audioLevel } = useAudioLevel(localStream, true);
 
   useEffect(() => {
@@ -34,9 +39,46 @@ export default function SettingsModal({
     }
   }, [isOpen, localStream]);
 
+  const handleCustomBackgroundUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      toast.error("Please select an image wallpaper");
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append('image', file);
+
+    setIsUploadingBg(true);
+    const toastId = toast.loading("Uploading background to Cloudinary...");
+    try {
+      const res = await api.post('/upload/background', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+
+      if (res.data && res.data.url) {
+        const newBg = {
+          id: `custom_${Date.now()}`,
+          label: 'Custom',
+          img: res.data.url
+        };
+        setCustomBackgrounds(prev => [newBg, ...prev]);
+        onSelectVirtualBackground(newBg.id);
+        toast.success("Custom wallpaper uploaded & applied! 🖼️", { id: toastId });
+      }
+    } catch (err) {
+      toast.error("Failed to upload custom background", { id: toastId });
+    } finally {
+      setIsUploadingBg(false);
+    }
+  };
+
   if (!isOpen) return null;
 
-  const activeBg = VIRTUAL_BACKGROUNDS.find(b => b.id === virtualBackground);
+  const allBackgrounds = [...VIRTUAL_BACKGROUNDS, ...customBackgrounds];
+  const activeBg = allBackgrounds.find(b => b.id === virtualBackground);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-md animate-in fade-in duration-150">
@@ -111,7 +153,6 @@ export default function SettingsModal({
               
               {/* Live Preview Tile */}
               <div className="relative bg-slate-900 rounded-3xl aspect-video overflow-hidden border border-slate-200 flex items-center justify-center shadow-xs">
-                {/* Virtual Image Background if active */}
                 {activeBg?.img && (
                   <img
                     src={activeBg.img}
@@ -120,7 +161,6 @@ export default function SettingsModal({
                   />
                 )}
 
-                {/* Video Feed */}
                 <video
                   ref={videoPreviewRef}
                   autoPlay
@@ -143,12 +183,39 @@ export default function SettingsModal({
                     Virtual Backgrounds & Effects
                   </label>
                   <span className="text-[10px] text-blue-600 font-semibold flex items-center gap-1">
-                    <Sparkles className="w-3 h-3" /> Real-time Filter
+                    <Sparkles className="w-3 h-3" /> Cloudinary Enabled
                   </span>
                 </div>
 
                 <div className="grid grid-cols-3 sm:grid-cols-6 gap-2.5">
-                  {VIRTUAL_BACKGROUNDS.map((bg) => {
+                  
+                  {/* Upload Custom Wallpaper Button */}
+                  <button
+                    type="button"
+                    onClick={() => bgFileInputRef.current?.click()}
+                    disabled={isUploadingBg}
+                    className="h-20 rounded-2xl p-1.5 flex flex-col items-center justify-center border-2 border-dashed border-blue-300 hover:border-blue-500 bg-blue-50/50 hover:bg-blue-50 text-blue-600 transition-all cursor-pointer text-center"
+                  >
+                    {isUploadingBg ? (
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                    ) : (
+                      <>
+                        <Plus className="w-5 h-5 mb-1" />
+                        <span className="text-[10px] font-bold">Upload Custom</span>
+                      </>
+                    )}
+                  </button>
+
+                  <input
+                    type="file"
+                    ref={bgFileInputRef}
+                    onChange={handleCustomBackgroundUpload}
+                    className="hidden"
+                    accept="image/png,image/jpeg,image/webp,image/jpg"
+                  />
+
+                  {/* Preset & Custom Backgrounds */}
+                  {allBackgrounds.map((bg) => {
                     const isSelected = virtualBackground === bg.id;
                     return (
                       <button
@@ -202,7 +269,6 @@ export default function SettingsModal({
                   <span className="text-xs font-mono font-bold text-blue-600">{audioLevel}%</span>
                 </div>
 
-                {/* Progress bar */}
                 <div className="w-full h-3 rounded-full bg-slate-200 overflow-hidden p-0.5">
                   <div
                     className="h-full rounded-full transition-all duration-75 bg-linear-to-r from-emerald-400 via-teal-500 to-blue-600"
@@ -252,7 +318,6 @@ export default function SettingsModal({
           {activeTab === 'network' && (
             <div className="space-y-4">
               
-              {/* Network Quality Card */}
               <div className="p-4 rounded-2xl bg-emerald-50/70 border border-emerald-200/70 flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <div className="p-2.5 rounded-xl bg-emerald-600 text-white shadow-xs">
@@ -268,7 +333,6 @@ export default function SettingsModal({
                 </span>
               </div>
 
-              {/* Real-time Diagnostics Grid */}
               <div className="grid grid-cols-3 gap-3 text-center">
                 <div className="p-3 bg-slate-50 border border-slate-200 rounded-2xl space-y-1">
                   <span className="text-[10px] text-slate-500 font-semibold uppercase">Latency</span>

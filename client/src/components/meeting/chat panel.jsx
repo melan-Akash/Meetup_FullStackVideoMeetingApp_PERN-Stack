@@ -30,25 +30,41 @@ export default function ChatPanel({ isOpen, onClose, messages, onSendMessage, cu
     }
   }, [messages, isOpen]);
 
-  const handleFileSelect = (e) => {
+  const [isUploadingFile, setIsUploadingFile] = useState(false);
+
+  const handleFileSelect = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
 
-    if (file.size > 5 * 1024 * 1024) {
-      toast.error("File size exceeds 5MB limit");
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error("File size exceeds 10MB limit");
       return;
     }
 
-    const reader = new FileReader();
-    reader.onload = () => {
-      setSelectedFile({
-        name: file.name,
-        type: file.type,
-        size: (file.size / 1024).toFixed(1) + ' KB',
-        data: reader.result
+    const formData = new FormData();
+    formData.append('file', file);
+
+    setIsUploadingFile(true);
+    const toastId = toast.loading("Uploading to Cloudinary...");
+    try {
+      const res = await api.post('/upload/chat-file', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
       });
-    };
-    reader.readAsDataURL(file);
+
+      if (res.data && res.data.url) {
+        setSelectedFile({
+          name: res.data.name || file.name,
+          type: res.data.type || file.type,
+          size: res.data.size,
+          data: res.data.url // Cloudinary secure CDN URL
+        });
+        toast.success("File uploaded to Cloudinary! ☁️", { id: toastId });
+      }
+    } catch (err) {
+      toast.error("Cloudinary upload failed", { id: toastId });
+    } finally {
+      setIsUploadingFile(false);
+    }
   };
 
   const handleSubmit = (e) => {

@@ -19,6 +19,7 @@ import authRoutes from './routes/authRoutes.js';
 import meetingRoutes from './routes/meetingRoutes.js';
 import emailRoutes from './routes/emailRoutes.js';
 import aiRoutes from './routes/aiRoutes.js';
+import uploadRoutes from './routes/uploadRoutes.js';
 import { handleSocketConnections } from './socket/socketHandler.js';
 
 const app = express();
@@ -49,6 +50,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/meetings', meetingRoutes);
 app.use('/api/email', emailRoutes);
 app.use('/api/ai', aiRoutes);
+app.use('/api/upload', uploadRoutes);
 
 // Configure Socket.io server for WebRTC signaling and Live Chat
 const io = new Server(httpServer, {
