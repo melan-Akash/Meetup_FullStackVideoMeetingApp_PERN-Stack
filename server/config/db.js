@@ -1,14 +1,14 @@
-import { Pool, neon } from '@neondatabase/serverless';
+import dns from 'node:dns';
+dns.setDefaultResultOrder('ipv4first');
+
+import pkg from 'pg';
+const { Pool } = pkg;
+import { neon } from '@neondatabase/serverless';
 import dotenv from 'dotenv';
 
 dotenv.config();
 
-let rawUrl = process.env.DATABASE_URL || '';
-
-// Clean connection string if it starts with "psql " or quotes
-if (rawUrl.startsWith('psql ')) {
-  rawUrl = rawUrl.replace(/^psql\s+['"]?/, '').replace(/['"]?$/, '');
-}
+let rawUrl = (process.env.DATABASE_URL || '').replace(/['"]/g, '').trim();
 
 if (!rawUrl) {
   throw new Error("DATABASE_URL is not defined in environment variables");
@@ -17,8 +17,11 @@ if (!rawUrl) {
 // Neon HTTP query instance
 export const sql = neon(rawUrl);
 
-// Neon Connection Pool instance for pg pool.query compatibility
-export const pool = new Pool({ connectionString: rawUrl });
+// PostgreSQL Connection Pool instance
+export const pool = new Pool({
+  connectionString: rawUrl,
+  ssl: { rejectUnauthorized: false }
+});
 
 // Initialize PostgreSQL database tables
 export async function initDB() {
@@ -94,10 +97,9 @@ export async function initDB() {
       );
     `);
 
-    console.log("Database initialized successfully with Cloudinary profile columns");
+    console.log("Database initialized successfully with IPv4 connection");
   } catch (error) {
     console.error("Error initializing database:", error);
-    throw error;
   }
 }
 
