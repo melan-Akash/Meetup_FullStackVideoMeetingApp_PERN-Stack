@@ -8,11 +8,10 @@ export default function VideoGrid({
   audioEnabled, 
   videoEnabled,
   isLocalHandRaised,
-  isLocalScreenSharing 
+  isLocalScreenSharing,
+  virtualBackground = 'none'
 }) {
-  // Check if anyone is screen sharing
   const isSomeoneSharing = isLocalScreenSharing || remoteUsers.some(u => u.isScreenSharing);
-  
   const totalParticipants = 1 + remoteUsers.length;
 
   const getGridLayout = () => {
@@ -36,6 +35,7 @@ export default function VideoGrid({
         videoEnabled={videoEnabled}
         isHandRaised={isLocalHandRaised}
         isScreenSharing={isLocalScreenSharing}
+        virtualBackground={virtualBackground}
       />
 
       {/* 2. Remote Users */}

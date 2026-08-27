@@ -11,6 +11,7 @@ import ControlBar from '../components/meeting/controlbar.jsx';
 import ReactionsOverlay from '../components/meeting/reactions overlay.jsx';
 import WhiteboardModal from '../components/meeting/whiteboard modal.jsx';
 import MeetingNotesDrawer from '../components/meeting/meeting notes drawer.jsx';
+import SettingsModal from '../components/meeting/settings modal.jsx';
 import WaitingLobby from '../components/meeting/waiting lobby.jsx';
 import { toast } from 'react-hot-toast';
 
@@ -65,9 +66,13 @@ export default function MeetingRoom() {
     toggleRecording
   } = useRecording(roomID);
 
+  // Quality & Modals State
   const [isParticipantsOpen, setIsParticipantsOpen] = useState(false);
   const [isWhiteboardOpen, setIsWhiteboardOpen] = useState(false);
   const [isNotesOpen, setIsNotesOpen] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [virtualBackground, setVirtualBackground] = useState('none');
+  const [noiseSuppressionEnabled, setNoiseSuppressionEnabled] = useState(true);
 
   const toggleParticipants = useCallback(() => {
     setIsParticipantsOpen((prev) => !prev);
@@ -130,6 +135,7 @@ export default function MeetingRoom() {
             videoEnabled={videoEnabled}
             isLocalHandRaised={isHandRaised}
             isLocalScreenSharing={isScreenSharing}
+            virtualBackground={virtualBackground}
           />
         </div>
 
@@ -181,6 +187,17 @@ export default function MeetingRoom() {
         roomID={roomID}
       />
 
+      {/* Audio & Video Quality Settings Modal */}
+      <SettingsModal
+        isOpen={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
+        localStream={localStream}
+        virtualBackground={virtualBackground}
+        onSelectVirtualBackground={(bgId) => setVirtualBackground(bgId)}
+        noiseSuppressionEnabled={noiseSuppressionEnabled}
+        onToggleNoiseSuppression={() => setNoiseSuppressionEnabled(prev => !prev)}
+      />
+
       {/* Meeting Toolbar Controls */}
       <ControlBar
         roomID={roomID}
@@ -197,6 +214,7 @@ export default function MeetingRoom() {
         onOpenWhiteboard={() => setIsWhiteboardOpen(true)}
         onToggleNotes={toggleNotes}
         isNotesOpen={isNotesOpen}
+        onOpenSettings={() => setIsSettingsOpen(true)}
         onToggleRaiseHand={toggleRaiseHand}
         onSendReaction={sendReaction}
         onToggleChat={toggleChat}

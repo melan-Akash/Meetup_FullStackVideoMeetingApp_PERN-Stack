@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { 
   Mic, MicOff, Video, VideoOff, MessageSquare, 
   Users, Copy, Check, PhoneOff, Monitor, Hand, 
-  Smile, Palette, FileText, Circle, Square 
+  Smile, Palette, FileText, Circle, Square, Settings 
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
@@ -24,6 +24,7 @@ export default function ControlBar({
   onOpenWhiteboard,
   onToggleNotes,
   isNotesOpen,
+  onOpenSettings,
   onSendReaction,
   onToggleChat,
   onToggleParticipants,
@@ -39,7 +40,6 @@ export default function ControlBar({
   const [isReactionPickerOpen, setIsReactionPickerOpen] = useState(false);
   const reactionPickerRef = useRef(null);
 
-  // Close reaction picker on outside click
   useEffect(() => {
     const handleClickOutside = (e) => {
       if (reactionPickerRef.current && !reactionPickerRef.current.contains(e.target)) {
@@ -70,7 +70,7 @@ export default function ControlBar({
   return (
     <div className="bg-white border-t border-slate-200/90 px-4 sm:px-8 py-3 flex flex-col sm:flex-row gap-3 items-center justify-between shrink-0 shadow-xs z-40 relative">
       
-      {/* Left section: ID + Copy Link + Recording Status Badge */}
+      {/* Left section: ID + Copy Link + Recording Status */}
       <div className="flex items-center gap-2.5">
         <div className="flex items-center gap-1.5">
           <span className="text-xs font-mono text-slate-500">
@@ -213,6 +213,15 @@ export default function ControlBar({
           )}
         </div>
 
+        {/* Settings Button */}
+        <button
+          onClick={onOpenSettings}
+          className="p-2.5 sm:p-3 rounded-full bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-700 transition-all cursor-pointer"
+          title="Audio, Video & Quality Settings"
+        >
+          <Settings className="w-4 h-4 sm:w-4.5 sm:h-4.5" />
+        </button>
+
         {/* Chat Drawer Toggle */}
         <button
           onClick={onToggleChat}
@@ -259,7 +268,7 @@ export default function ControlBar({
 
       {/* Right section: MeetUp Room tag */}
       <div className="hidden lg:flex items-center text-xs text-slate-400 font-medium">
-        MeetUp Pro
+        MeetUp HD
       </div>
 
     </div>
