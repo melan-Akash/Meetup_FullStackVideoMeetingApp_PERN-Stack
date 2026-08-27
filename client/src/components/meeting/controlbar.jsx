@@ -2,7 +2,8 @@ import React, { useState, useRef, useEffect } from 'react';
 import { 
   Mic, MicOff, Video, VideoOff, MessageSquare, 
   Users, Copy, Check, PhoneOff, Monitor, Hand, 
-  Smile, Palette, FileText, Circle, Square, Settings 
+  Smile, Palette, FileText, Circle, Square, Settings, 
+  Sparkles, Captions 
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
@@ -16,11 +17,16 @@ export default function ControlBar({
   isHandRaised,
   isRecording,
   recordingTime,
+  isLiveCaptionsEnabled,
+  isAICoPilotOpen,
   onToggleAudio,
   onToggleVideo,
   onToggleScreenShare,
   onToggleRaiseHand,
   onToggleRecording,
+  onToggleLiveCaptions,
+  onToggleAICoPilot,
+  onOpenAISummary,
   onOpenWhiteboard,
   onToggleNotes,
   isNotesOpen,
@@ -95,7 +101,7 @@ export default function ControlBar({
       </div>
 
       {/* Middle section: Action Controls */}
-      <div className="flex items-center gap-2 sm:gap-2.5 flex-wrap justify-center">
+      <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap justify-center">
         
         {/* Audio Toggle */}
         <button
@@ -134,6 +140,41 @@ export default function ControlBar({
           title={isScreenSharing ? "Stop Sharing Screen" : "Share Screen"}
         >
           <Monitor className="w-4 h-4 sm:w-4.5 sm:h-4.5" />
+        </button>
+
+        {/* AI Co-Pilot Drawer Trigger */}
+        <button
+          onClick={onToggleAICoPilot}
+          className={`p-2.5 sm:p-3 rounded-full border transition-all cursor-pointer ${
+            isAICoPilotOpen
+              ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md shadow-blue-500/25 ring-2 ring-blue-400/40'
+              : 'bg-gradient-to-r from-blue-50 to-indigo-50 hover:from-blue-100 hover:to-indigo-100 border-blue-200 text-[#0055ff]'
+          }`}
+          title="Open AI Co-Pilot Assistant"
+        >
+          <Sparkles className="w-4 h-4 sm:w-4.5 sm:h-4.5" />
+        </button>
+
+        {/* AI Meeting Summary Trigger */}
+        <button
+          onClick={onOpenAISummary}
+          className="p-2.5 sm:p-3 rounded-full bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-700 transition-all cursor-pointer"
+          title="Generate AI Meeting Summary & Action Items"
+        >
+          <FileText className="w-4 h-4 sm:w-4.5 sm:h-4.5 text-blue-600" />
+        </button>
+
+        {/* Live Captions Toggle (CC) */}
+        <button
+          onClick={onToggleLiveCaptions}
+          className={`p-2.5 sm:p-3 rounded-full border transition-all cursor-pointer ${
+            isLiveCaptionsEnabled
+              ? 'bg-blue-50 border-blue-300 text-[#0055ff]'
+              : 'bg-slate-100 hover:bg-slate-200 border-slate-200 text-slate-700'
+          }`}
+          title={isLiveCaptionsEnabled ? "Turn off Live Captions" : "Turn on Live Captions (CC)"}
+        >
+          <Captions className="w-4 h-4 sm:w-4.5 sm:h-4.5" />
         </button>
 
         {/* Whiteboard Modal Trigger */}
@@ -266,9 +307,10 @@ export default function ControlBar({
         </button>
       </div>
 
-      {/* Right section: MeetUp Room tag */}
-      <div className="hidden lg:flex items-center text-xs text-slate-400 font-medium">
-        MeetUp HD
+      {/* Right section: MeetUp AI Room tag */}
+      <div className="hidden lg:flex items-center text-xs text-blue-600 font-semibold gap-1">
+        <Sparkles className="w-3.5 h-3.5" />
+        <span>MeetUp AI Pro</span>
       </div>
 
     </div>

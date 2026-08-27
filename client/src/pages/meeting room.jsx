@@ -13,6 +13,9 @@ import WhiteboardModal from '../components/meeting/whiteboard modal.jsx';
 import MeetingNotesDrawer from '../components/meeting/meeting notes drawer.jsx';
 import SettingsModal from '../components/meeting/settings modal.jsx';
 import InviteEmailModal from '../components/meeting/invite email modal.jsx';
+import AICoPilotDrawer from '../components/meeting/ai copilot drawer.jsx';
+import AISummaryModal from '../components/meeting/ai summary modal.jsx';
+import LiveCaptions from '../components/meeting/live captions.jsx';
 import WaitingLobby from '../components/meeting/waiting lobby.jsx';
 import { toast } from 'react-hot-toast';
 
@@ -73,6 +76,9 @@ export default function MeetingRoom() {
   const [isNotesOpen, setIsNotesOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isEmailInviteOpen, setIsEmailInviteOpen] = useState(false);
+  const [isAICoPilotOpen, setIsAICoPilotOpen] = useState(false);
+  const [isAISummaryOpen, setIsAISummaryOpen] = useState(false);
+  const [isLiveCaptionsEnabled, setIsLiveCaptionsEnabled] = useState(false);
   const [virtualBackground, setVirtualBackground] = useState('none');
   const [noiseSuppressionEnabled, setNoiseSuppressionEnabled] = useState(true);
 
@@ -84,10 +90,27 @@ export default function MeetingRoom() {
     setIsNotesOpen((prev) => !prev);
   }, []);
 
+  const toggleAICoPilot = useCallback(() => {
+    setIsAICoPilotOpen((prev) => !prev);
+  }, []);
+
+  const toggleLiveCaptions = useCallback(() => {
+    setIsLiveCaptionsEnabled((prev) => {
+      const next = !prev;
+      toast.success(next ? "Live Subtitles (CC) enabled 🎙️" : "Live Subtitles disabled");
+      return next;
+    });
+  }, []);
+
   // If user is currently waiting in the lobby for host approval
   if (isWaitingInLobby) {
     return <WaitingLobby roomID={roomID} hostName="Meeting Host" />;
   }
+
+  const allParticipants = [
+    { id: user?.id, name: user?.fullName || 'You' },
+    ...remoteUsers.map(u => ({ id: u.socketId, name: u.username || u.userName || 'Participant' }))
+  ];
 
   return (
     <div className="flex flex-col h-screen bg-[#f0f4f8] text-slate-900 overflow-hidden select-none relative">
@@ -104,6 +127,12 @@ export default function MeetingRoom() {
             <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-700 border border-rose-300 animate-pulse flex items-center gap-1">
               <span className="w-1.5 h-1.5 rounded-full bg-rose-600"></span>
               <span>REC {recordingTime}</span>
+            </span>
+          )}
+
+          {isLiveCaptionsEnabled && (
+            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-blue-100 text-blue-800 border border-blue-300 flex items-center gap-1">
+              <span>CC Live</span>
             </span>
           )}
 
@@ -127,6 +156,12 @@ export default function MeetingRoom() {
         {/* Floating Emoji Reactions Overlay */}
         <ReactionsOverlay reactions={reactions} />
 
+        {/* Live Speech Subtitles Overlay */}
+        <LiveCaptions
+          isEnabled={isLiveCaptionsEnabled}
+          username={user?.fullName || 'You'}
+        />
+
         {/* Video Grid Feed */}
         <div className="grow flex items-center justify-center p-6 sm:p-8">
           <VideoGrid
@@ -141,13 +176,22 @@ export default function MeetingRoom() {
           />
         </div>
 
-        {/* Live Chat Sliding Drawer */}
+        {/* Live Chat Sliding Drawer with AI Translation */}
         <ChatPanel
           isOpen={isChatOpen}
           onClose={toggleChat}
           messages={messages}
           onSendMessage={sendMessage}
           currentUser={user}
+        />
+
+        {/* AI Co-Pilot Assistant Sliding Drawer */}
+        <AICoPilotDrawer
+          isOpen={isAICoPilotOpen}
+          onClose={() => setIsAICoPilotOpen(false)}
+          roomID={roomID}
+          meetingTitle="MeetUp Video Session"
+          messages={messages}
         />
 
         {/* Shared Notes Drawer */}
@@ -209,6 +253,16 @@ export default function MeetingRoom() {
         hostName={user?.fullName || 'Host'}
       />
 
+      {/* AI Meeting Summary & Action Items Modal */}
+      <AISummaryModal
+        isOpen={isAISummaryOpen}
+        onClose={() => setIsAISummaryOpen(false)}
+        meetingTitle="Live Meeting Session"
+        messages={messages}
+        participants={allParticipants}
+        user={user}
+      />
+
       {/* Meeting Toolbar Controls */}
       <ControlBar
         roomID={roomID}
@@ -218,10 +272,15 @@ export default function MeetingRoom() {
         isHandRaised={isHandRaised}
         isRecording={isRecording}
         recordingTime={recordingTime}
+        isLiveCaptionsEnabled={isLiveCaptionsEnabled}
+        isAICoPilotOpen={isAICoPilotOpen}
         onToggleAudio={toggleAudio}
         onToggleVideo={toggleVideo}
         onToggleScreenShare={toggleScreenShare}
         onToggleRecording={toggleRecording}
+        onToggleLiveCaptions={toggleLiveCaptions}
+        onToggleAICoPilot={toggleAICoPilot}
+        onOpenAISummary={() => setIsAISummaryOpen(true)}
         onOpenWhiteboard={() => setIsWhiteboardOpen(true)}
         onToggleNotes={toggleNotes}
         isNotesOpen={isNotesOpen}

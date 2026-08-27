@@ -1,14 +1,29 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { X, Send, Paperclip, FileText, Download, Image as ImageIcon } from 'lucide-react';
+import { 
+  X, Send, Paperclip, FileText, Download, 
+  Globe, Languages, Loader2, Sparkles 
+} from 'lucide-react';
 import { toast } from 'react-hot-toast';
+import api from '../../config/api';
+
+const TRANSLATION_LANGUAGES = [
+  { code: 'Sinhala', label: 'සිංහල (Sinhala)' },
+  { code: 'English', label: 'English' },
+  { code: 'Tamil', label: 'தமிழ் (Tamil)' },
+  { code: 'Japanese', label: '日本語 (Japanese)' },
+  { code: 'Spanish', label: 'Español' },
+  { code: 'Hindi', label: 'हिन्दी (Hindi)' },
+  { code: 'German', label: 'Deutsch' }
+];
 
 export default function ChatPanel({ isOpen, onClose, messages, onSendMessage, currentUser }) {
   const [text, setText] = useState('');
   const [selectedFile, setSelectedFile] = useState(null);
+  const [translations, setTranslations] = useState({}); // { [msgId]: { lang, text, loading } }
+  const [activeTranslateMsgId, setActiveTranslateMsgId] = useState(null);
   const fileInputRef = useRef(null);
   const chatBottomRef = useRef(null);
 
-  // Auto-scroll to latest message
   useEffect(() => {
     if (isOpen) {
       chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -19,7 +34,6 @@ export default function ChatPanel({ isOpen, onClose, messages, onSendMessage, cu
     const file = e.target.files[0];
     if (!file) return;
 
-    // Limit to 5MB for browser socket transfer
     if (file.size > 5 * 1024 * 1024) {
       toast.error("File size exceeds 5MB limit");
       return;
@@ -50,6 +64,38 @@ export default function ChatPanel({ isOpen, onClose, messages, onSendMessage, cu
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
+  const handleTranslateMessage = async (msgId, originalText, targetLang) => {
+    if (!originalText || !originalText.trim()) return;
+
+    setTranslations(prev => ({
+      ...prev,
+      [msgId]: { lang: targetLang, loading: true }
+    }));
+    setActiveTranslateMsgId(null);
+
+    try {
+      const res = await api.post('/ai/translate', {
+        text: originalText,
+        targetLanguage: targetLang
+      });
+
+      if (res.data && res.data.translatedText) {
+        setTranslations(prev => ({
+          ...prev,
+          [msgId]: { lang: targetLang, text: res.data.translatedText, loading: false }
+        }));
+        toast.success(`Translated to ${targetLang}! 🌐`);
+      }
+    } catch (err) {
+      toast.error("AI translation failed");
+      setTranslations(prev => {
+        const next = { ...prev };
+        delete next[msgId];
+        return next;
+      });
+    }
+  };
+
   if (!isOpen) return null;
 
   return (
@@ -57,7 +103,12 @@ export default function ChatPanel({ isOpen, onClose, messages, onSendMessage, cu
       
       {/* Header */}
       <div className="p-4 border-b border-slate-100 flex items-center justify-between">
-        <h3 className="font-bold text-sm text-slate-900">Live Meeting Chat</h3>
+        <div className="flex items-center gap-1.5">
+          <h3 className="font-bold text-sm text-slate-900">Live Meeting Chat</h3>
+          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-blue-50 text-blue-600 flex items-center gap-0.5">
+            <Sparkles className="w-2.5 h-2.5" /> AI Translate
+          </span>
+        </div>
         <button 
           onClick={onClose} 
           className="p-1 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-slate-700 transition-colors cursor-pointer"
@@ -78,6 +129,7 @@ export default function ChatPanel({ isOpen, onClose, messages, onSendMessage, cu
           messages.map((msg) => {
             const isMe = msg.senderId === currentUser?.id;
             const isSystem = msg.senderId === 'system';
+            const translation = translations[msg.id];
 
             if (isSystem) {
               return (
@@ -89,10 +141,40 @@ export default function ChatPanel({ isOpen, onClose, messages, onSendMessage, cu
             }
 
             return (
-              <div key={msg.id} className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}>
-                <span className="text-[10px] text-slate-400 mb-1 px-1 font-medium">
-                  {isMe ? 'You' : msg.senderName}
-                </span>
+              <div key={msg.id} className={`flex flex-col ${isMe ? 'items-end' : 'items-start'} group relative`}>
+                <div className="flex items-center gap-1.5 mb-1 px-1">
+                  <span className="text-[10px] text-slate-400 font-medium">
+                    {isMe ? 'You' : msg.senderName}
+                  </span>
+
+                  {/* Translate Trigger Button */}
+                  {msg.text && (
+                    <button
+                      onClick={() => setActiveTranslateMsgId(activeTranslateMsgId === msg.id ? null : msg.id)}
+                      className="opacity-0 group-hover:opacity-100 text-[10px] text-blue-600 hover:underline flex items-center gap-0.5 transition-opacity cursor-pointer"
+                      title="Translate message with AI"
+                    >
+                      <Globe className="w-3 h-3" />
+                      <span>Translate</span>
+                    </button>
+                  )}
+                </div>
+
+                {/* Translation Language Selector Popover */}
+                {activeTranslateMsgId === msg.id && (
+                  <div className="mb-2 p-2 rounded-2xl bg-white border border-slate-200 shadow-xl z-20 flex flex-col gap-1 text-[11px] font-medium w-48 animate-in fade-in zoom-in-95 duration-150">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider px-2 py-0.5">Translate to</span>
+                    {TRANSLATION_LANGUAGES.map(lang => (
+                      <button
+                        key={lang.code}
+                        onClick={() => handleTranslateMessage(msg.id, msg.text, lang.code)}
+                        className="text-left px-2 py-1 hover:bg-blue-50 hover:text-blue-600 rounded-lg transition-colors cursor-pointer"
+                      >
+                        {lang.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
 
                 {/* Message Bubble */}
                 <div
@@ -104,6 +186,42 @@ export default function ChatPanel({ isOpen, onClose, messages, onSendMessage, cu
                 >
                   {/* Text Content */}
                   {msg.text && <p>{msg.text}</p>}
+
+                  {/* Inline Translated Text Box */}
+                  {translation && (
+                    <div className={`p-2 rounded-xl text-[11px] leading-relaxed border mt-1.5 ${
+                      isMe 
+                        ? 'bg-white/15 border-white/25 text-white' 
+                        : 'bg-blue-50/80 border-blue-200 text-blue-900'
+                    }`}>
+                      <div className="flex items-center justify-between text-[9px] font-bold opacity-80 mb-1">
+                        <span className="flex items-center gap-1">
+                          <Languages className="w-3 h-3" />
+                          <span>Translated to {translation.lang}</span>
+                        </span>
+                        <button
+                          onClick={() => {
+                            setTranslations(prev => {
+                              const n = { ...prev };
+                              delete n[msg.id];
+                              return n;
+                            });
+                          }}
+                          className="hover:underline cursor-pointer"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                      {translation.loading ? (
+                        <div className="flex items-center gap-1.5 py-0.5">
+                          <Loader2 className="w-3 h-3 animate-spin" />
+                          <span>Translating...</span>
+                        </div>
+                      ) : (
+                        <p className="font-medium">{translation.text}</p>
+                      )}
+                    </div>
+                  )}
 
                   {/* File Attachment Card */}
                   {msg.file && (
@@ -164,8 +282,6 @@ export default function ChatPanel({ isOpen, onClose, messages, onSendMessage, cu
       {/* Message Input Bar */}
       <form onSubmit={handleSubmit} className="p-3.5 border-t border-slate-100 bg-white">
         <div className="flex items-center gap-1.5">
-          
-          {/* File Upload Input & Trigger */}
           <input
             type="file"
             ref={fileInputRef}
@@ -182,7 +298,6 @@ export default function ChatPanel({ isOpen, onClose, messages, onSendMessage, cu
             <Paperclip className="w-4 h-4" />
           </button>
 
-          {/* Text Input */}
           <input
             type="text"
             placeholder="Type message or share files..."
@@ -191,7 +306,6 @@ export default function ChatPanel({ isOpen, onClose, messages, onSendMessage, cu
             className="grow px-3.5 py-2.5 rounded-full bg-slate-50 border border-slate-200/80 focus:border-blue-500 focus:bg-white text-xs text-slate-800 placeholder-slate-400 outline-none transition-all"
           />
 
-          {/* Send Button */}
           <button
             type="submit"
             disabled={!text.trim() && !selectedFile}

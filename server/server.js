@@ -3,6 +3,10 @@ import { createServer } from 'http';
 import { Server } from 'socket.io';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import dns from 'node:dns';
+
+// Ensure IPv4 first on Node.js to prevent IPv6 timeout issues
+dns.setDefaultResultOrder('ipv4first');
 
 // Load environment variables
 dotenv.config();
@@ -14,6 +18,7 @@ import { initDB } from './config/db.js';
 import authRoutes from './routes/authRoutes.js';
 import meetingRoutes from './routes/meetingRoutes.js';
 import emailRoutes from './routes/emailRoutes.js';
+import aiRoutes from './routes/aiRoutes.js';
 import { handleSocketConnections } from './socket/socketHandler.js';
 
 const app = express();
@@ -43,6 +48,7 @@ app.get('/', (req, res) => {
 app.use('/api/auth', authRoutes);
 app.use('/api/meetings', meetingRoutes);
 app.use('/api/email', emailRoutes);
+app.use('/api/ai', aiRoutes);
 
 // Configure Socket.io server for WebRTC signaling and Live Chat
 const io = new Server(httpServer, {
