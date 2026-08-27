@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
-import { Calendar, Users, MessageSquare, Copy, Check, Clock } from 'lucide-react';
+import { Calendar, Users, MessageSquare, Copy, Check, Clock, Trash2 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
-export default function SessionCard({ session, onViewDetails, onRejoin }) {
+export default function SessionCard({ session, onViewDetails, onRejoin, onDelete }) {
   const [copied, setCopied] = useState(false);
   const isActive = session.status === 'active';
   const isScheduled = session.status === 'scheduled';
@@ -29,35 +29,57 @@ export default function SessionCard({ session, onViewDetails, onRejoin }) {
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const handleDelete = (e) => {
+    e.stopPropagation();
+    if (window.confirm(`Are you sure you want to delete session "${session.title || meetingID}"?`)) {
+      if (onDelete) {
+        onDelete(meetingID);
+      }
+    }
+  };
+
   return (
-    <div className="bg-white/70 backdrop-blur-xl border border-white/90 rounded-[28px] p-6 shadow-sm hover:shadow-md transition-all duration-200 flex flex-col justify-between">
+    <div className="bg-white/70 backdrop-blur-xl border border-white/90 rounded-[28px] p-6 shadow-sm hover:shadow-md transition-all duration-200 flex flex-col justify-between relative group">
       
-      {/* Top Row: Meeting ID & Status Badge */}
+      {/* Top Row: Meeting ID & Status Badge + Delete */}
       <div>
         <div className="flex items-center justify-between gap-2">
           <span className="text-xs font-mono text-slate-500">
             ID: {meetingID}
           </span>
 
-          {isActive && (
-            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold text-emerald-600 bg-emerald-50 border border-emerald-200/50">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-              <span>• Active</span>
-            </span>
-          )}
+          <div className="flex items-center gap-1.5">
+            {isActive && (
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold text-emerald-600 bg-emerald-50 border border-emerald-200/50">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                <span>• Active</span>
+              </span>
+            )}
 
-          {isScheduled && (
-            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold text-blue-600 bg-blue-50 border border-blue-200/50">
-              <Clock className="w-3 h-3" />
-              <span>• Scheduled</span>
-            </span>
-          )}
+            {isScheduled && (
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold text-blue-600 bg-blue-50 border border-blue-200/50">
+                <Clock className="w-3 h-3" />
+                <span>• Scheduled</span>
+              </span>
+            )}
 
-          {!isActive && !isScheduled && (
-            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium text-slate-500 bg-slate-100/80 border border-slate-200/50">
-              <span>• Ended</span>
-            </span>
-          )}
+            {!isActive && !isScheduled && (
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium text-slate-500 bg-slate-100/80 border border-slate-200/50">
+                <span>• Ended</span>
+              </span>
+            )}
+
+            {/* Delete Session Button */}
+            {onDelete && (
+              <button
+                onClick={handleDelete}
+                className="p-1 hover:bg-rose-50 text-slate-400 hover:text-rose-600 rounded-lg transition-colors cursor-pointer"
+                title="Delete Session"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Title */}

@@ -34,7 +34,6 @@ export const scheduleMeeting = async (req, res) => {
     return res.status(400).json({ error: "Missing required fields (scheduledAt, hostID)" });
   }
 
-  // Generate meeting code e.g. "qwe-rty-uio"
   const part = () => Math.random().toString(36).substring(2, 5);
   const meetingID = `${part()}-${part()}-${part()}`;
 
@@ -115,18 +114,15 @@ export const joinMeetingLog = async (req, res) => {
   }
 
   try {
-    // 1. Check if the meeting room session exists first
     const meetingCheck = await pool.query("SELECT * FROM meetings WHERE id = $1", [meetingID]);
     if (meetingCheck.rows.length === 0) {
       return res.status(404).json({ error: "Requested meeting session does not exist" });
     }
 
-    // If meeting was scheduled, activate it on first join
     if (meetingCheck.rows[0].status === 'scheduled') {
       await pool.query("UPDATE meetings SET status = 'active' WHERE id = $1", [meetingID]);
     }
 
-    // 2. Ingest participant log into database
     await pool.query(
       "INSERT INTO participants (meeting_id, user_id) VALUES ($1, $2) ON CONFLICT (meeting_id, user_id) DO NOTHING",
       [meetingID, userID]
@@ -163,15 +159,34 @@ export const endMeetingSession = async (req, res) => {
 };
 
 /**
+ * Deletes a meeting session permanently from the database
+ * Route: DELETE /api/meetings/:id
+ */
+export const deleteMeetingSession = async (req, res) => {
+  const { id } = req.params; // meetingID
+
+  try {
+    const result = await pool.query("DELETE FROM meetings WHERE id = $1 RETURNING *", [id]);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: "Meeting session not found to delete" });
+    }
+
+    res.status(200).json({ success: true, message: "Meeting session deleted successfully" });
+  } catch (err) {
+    console.error("Error deleting meeting session from db:", err);
+    res.status(500).json({ error: "Failed to delete meeting session" });
+  }
+};
+
+/**
  * Compiles a user's entire meeting logs history (as participant or host)
- * combined with participant lists and full chat message records.
  * Route: GET /api/meetings/user/:userID
  */
 export const getUserSessions = async (req, res) => {
   const { userID } = req.params;
 
   try {
-    // 1. Retrieve all meetings where the user was either the host OR a participant
     const query = `
       SELECT DISTINCT m.*, u.fullname as host_name, u.email as host_email
       FROM meetings m
@@ -183,9 +198,7 @@ export const getUserSessions = async (req, res) => {
     const meetingsResult = await pool.query(query, [userID]);
     const sessions = [];
 
-    // 2. Compile full logs for each meeting session found
     for (let meeting of meetingsResult.rows) {
-      // Fetch participant lists for this meeting
       const participantsResult = await pool.query(`
         SELECT u.id, u.fullname as name, u.email, p.joined_at 
         FROM participants p
@@ -194,7 +207,6 @@ export const getUserSessions = async (req, res) => {
         ORDER BY p.joined_at ASC
       `, [meeting.id]);
 
-      // Fetch recorded chat messages for this meeting
       const messagesResult = await pool.query(`
         SELECT id, sender_id as "senderId", sender_name as "senderName", text, timestamp
         FROM messages 
@@ -202,7 +214,6 @@ export const getUserSessions = async (req, res) => {
         ORDER BY timestamp ASC
       `, [meeting.id]);
 
-      // Map properties to match client/src/assets/assets.js structures exactly
       sessions.push({
         id: `session_${meeting.id}`,
         meetingID: meeting.id,
