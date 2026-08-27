@@ -49,10 +49,20 @@ export async function initDB() {
         title VARCHAR(255) DEFAULT 'Instant Meeting',
         host_id VARCHAR(255) NOT NULL REFERENCES users(id) ON DELETE CASCADE ON UPDATE CASCADE,
         status VARCHAR(20) DEFAULT 'active',
+        scheduled_at TIMESTAMPTZ,
+        duration INT DEFAULT 30,
+        description TEXT,
         ended_at TIMESTAMPTZ,
         created_at TIMESTAMPTZ DEFAULT NOW(),
         updated_at TIMESTAMPTZ DEFAULT NOW()
       );
+    `);
+
+    // Ensure schedule columns exist if table already existed
+    await pool.query(`
+      ALTER TABLE meetings ADD COLUMN IF NOT EXISTS scheduled_at TIMESTAMPTZ;
+      ALTER TABLE meetings ADD COLUMN IF NOT EXISTS duration INT DEFAULT 30;
+      ALTER TABLE meetings ADD COLUMN IF NOT EXISTS description TEXT;
     `);
 
     // 3. Participants Table

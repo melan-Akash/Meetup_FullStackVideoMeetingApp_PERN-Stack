@@ -1,6 +1,8 @@
 import express from 'express';
 import { 
   createMeeting, 
+  scheduleMeeting,
+  getUpcomingMeetings,
   joinMeetingLog, 
   endMeetingSession, 
   getUserSessions 
@@ -10,9 +12,21 @@ const router = express.Router();
 
 /**
  * Route: POST /api/meetings/create
- * Purpose: Persists a newly created conference room ID and title to PostgreSQL.
+ * Purpose: Persists a newly created instant conference room ID and title to PostgreSQL.
  */
 router.post('/create', createMeeting);
+
+/**
+ * Route: POST /api/meetings/schedule
+ * Purpose: Schedules a future conference room with date, time, link, and invitation generator.
+ */
+router.post('/schedule', scheduleMeeting);
+
+/**
+ * Route: GET /api/meetings/upcoming/:userID
+ * Purpose: Retrieves upcoming scheduled meetings for a specific user.
+ */
+router.get('/upcoming/:userID', getUpcomingMeetings);
 
 /**
  * Route: POST /api/meetings/join-log
