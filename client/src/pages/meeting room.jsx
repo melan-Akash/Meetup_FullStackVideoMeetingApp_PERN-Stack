@@ -3,11 +3,14 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useMockAuth } from '../context/AuthContext';
 import { useWebRTC } from '../hooks/use web RTC.js';
 import { useChat } from '../hooks/use chat.js';
+import { useRecording } from '../hooks/use recording.js';
 import VideoGrid from '../components/meeting/video grid.jsx';
 import ChatPanel from '../components/meeting/chat panel.jsx';
 import ParticipantsList from '../components/meeting/participants list.jsx';
 import ControlBar from '../components/meeting/controlbar.jsx';
 import ReactionsOverlay from '../components/meeting/reactions overlay.jsx';
+import WhiteboardModal from '../components/meeting/whiteboard modal.jsx';
+import MeetingNotesDrawer from '../components/meeting/meeting notes drawer.jsx';
 import WaitingLobby from '../components/meeting/waiting lobby.jsx';
 import { toast } from 'react-hot-toast';
 
@@ -56,10 +59,22 @@ export default function MeetingRoom() {
     toggleChat
   } = useChat(roomID, user);
 
+  const {
+    isRecording,
+    recordingTime,
+    toggleRecording
+  } = useRecording(roomID);
+
   const [isParticipantsOpen, setIsParticipantsOpen] = useState(false);
+  const [isWhiteboardOpen, setIsWhiteboardOpen] = useState(false);
+  const [isNotesOpen, setIsNotesOpen] = useState(false);
 
   const toggleParticipants = useCallback(() => {
     setIsParticipantsOpen((prev) => !prev);
+  }, []);
+
+  const toggleNotes = useCallback(() => {
+    setIsNotesOpen((prev) => !prev);
   }, []);
 
   // If user is currently waiting in the lobby for host approval
@@ -77,6 +92,13 @@ export default function MeetingRoom() {
             <span>Meeting Room ({roomID})</span>
             <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
           </h2>
+
+          {isRecording && (
+            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-700 border border-rose-300 animate-pulse flex items-center gap-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-rose-600"></span>
+              <span>REC {recordingTime}</span>
+            </span>
+          )}
 
           {isRoomLocked && (
             <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300">
@@ -120,6 +142,14 @@ export default function MeetingRoom() {
           currentUser={user}
         />
 
+        {/* Shared Notes Drawer */}
+        <MeetingNotesDrawer
+          isOpen={isNotesOpen}
+          onClose={toggleNotes}
+          roomID={roomID}
+          currentUser={user}
+        />
+
         {/* Participants List Sliding Drawer with Host Controls */}
         <ParticipantsList
           isOpen={isParticipantsOpen}
@@ -144,6 +174,13 @@ export default function MeetingRoom() {
         />
       </div>
 
+      {/* Collaborative Whiteboard Modal */}
+      <WhiteboardModal
+        isOpen={isWhiteboardOpen}
+        onClose={() => setIsWhiteboardOpen(false)}
+        roomID={roomID}
+      />
+
       {/* Meeting Toolbar Controls */}
       <ControlBar
         roomID={roomID}
@@ -151,9 +188,15 @@ export default function MeetingRoom() {
         videoEnabled={videoEnabled}
         isScreenSharing={isScreenSharing}
         isHandRaised={isHandRaised}
+        isRecording={isRecording}
+        recordingTime={recordingTime}
         onToggleAudio={toggleAudio}
         onToggleVideo={toggleVideo}
         onToggleScreenShare={toggleScreenShare}
+        onToggleRecording={toggleRecording}
+        onOpenWhiteboard={() => setIsWhiteboardOpen(true)}
+        onToggleNotes={toggleNotes}
+        isNotesOpen={isNotesOpen}
         onToggleRaiseHand={toggleRaiseHand}
         onSendReaction={sendReaction}
         onToggleChat={toggleChat}

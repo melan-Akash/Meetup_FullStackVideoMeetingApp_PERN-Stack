@@ -20,7 +20,6 @@ export const useChat = (roomID, user) => {
     };
     setMessages([welcomeMsg]);
 
-    // Ensure socket is connected
     if (!socket.connected) {
       socket.connect();
     }
@@ -28,7 +27,6 @@ export const useChat = (roomID, user) => {
     // Listen for incoming live chat messages from peers
     const handleReceiveMessage = (incomingMsg) => {
       setMessages((prev) => {
-        // Prevent duplicate messages
         if (prev.some(m => m.id === incomingMsg.id)) return prev;
         return [...prev, incomingMsg];
       });
@@ -45,22 +43,23 @@ export const useChat = (roomID, user) => {
     };
   }, [roomID, isChatOpen]);
 
-  // Dispatch outgoing message to backend socket & database
-  const sendMessage = useCallback((text) => {
-    if (!text || !text.trim()) return;
+  // Dispatch outgoing message (with optional file attachment)
+  const sendMessage = useCallback((text, file = null) => {
+    if ((!text || !text.trim()) && !file) return;
 
     const newMsg = {
       id: `msg_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
       senderId: user?.id || 'guest_user',
       senderName: user?.fullName || 'Guest',
-      text: text.trim(),
+      text: text ? text.trim() : '',
+      file: file || null,
       timestamp: new Date().toISOString()
     };
 
-    // Optimistic local state update
+    // Optimistic local update
     setMessages((prev) => [...prev, newMsg]);
 
-    // Broadcast to meeting room and persist in PostgreSQL via socketHandler.js
+    // Broadcast to meeting room
     if (socket.connected) {
       socket.emit('send-message', { roomID, message: newMsg });
     }

@@ -7,6 +7,9 @@ export const handleSocketConnections = (io) => {
   // Host settings per room: { roomID: { isLocked: boolean, isWaitingRoomEnabled: boolean, hostSocketId: string, waitingUsers: [{ socketId, userId, userName }] } }
   const roomSettings = {};
 
+  // Shared meeting notes per room: { roomID: string }
+  const roomNotes = {};
+
   io.on('connection', (socket) => {
     console.log(`User connected to Socket.io: ${socket.id}`);
 
@@ -20,7 +23,6 @@ export const handleSocketConnections = (io) => {
 
       if (!activeRoomId) return;
 
-      // Initialize room settings if not present
       if (!roomSettings[activeRoomId]) {
         roomSettings[activeRoomId] = {
           isLocked: false,
@@ -35,7 +37,7 @@ export const handleSocketConnections = (io) => {
         settings.hostSocketId = socket.id;
       }
 
-      // A. Check if Meeting is Locked (and user is not host)
+      // Check Locked
       if (settings.isLocked && !isHost && settings.hostSocketId !== socket.id) {
         socket.emit('meeting-locked', {
           message: "This meeting is locked by the host. New participants cannot join."
@@ -43,7 +45,7 @@ export const handleSocketConnections = (io) => {
         return;
       }
 
-      // B. Check if Waiting Room is Enabled (and user is not host)
+      // Check Waiting Room
       if (settings.isWaitingRoomEnabled && !isHost && settings.hostSocketId !== socket.id) {
         const waitingUser = {
           socketId: socket.id,
@@ -53,24 +55,20 @@ export const handleSocketConnections = (io) => {
           videoEnabled
         };
 
-        // Filter out if already in waiting list
         settings.waitingUsers = settings.waitingUsers.filter(w => w.socketId !== socket.id);
         settings.waitingUsers.push(waitingUser);
 
-        // Put socket into a waiting state
         socket.emit('waiting-in-lobby', {
           roomId: activeRoomId,
           message: "Please wait, the meeting host will let you in soon."
         });
 
-        // Notify Host about the waiting user
         if (settings.hostSocketId) {
           io.to(settings.hostSocketId).emit('waiting-users-updated', settings.waitingUsers);
         }
         return;
       }
 
-      // C. Normal Room Entry
       socket.join(activeRoomId);
 
       const newParticipant = {
@@ -92,24 +90,26 @@ export const handleSocketConnections = (io) => {
       roomParticipants[activeRoomId] = roomParticipants[activeRoomId].filter(p => p.socketId !== socket.id);
       roomParticipants[activeRoomId].push(newParticipant);
 
-      // Notify other peers in room
       socket.to(activeRoomId).emit('user-joined', newParticipant);
 
-      // Send existing peers list to the newcomer
       const existingPeers = roomParticipants[activeRoomId].filter(p => p.socketId !== socket.id);
       socket.emit('all-users', existingPeers);
       socket.emit('get-active-peers', existingPeers);
 
-      // Sync room moderation status
       socket.emit('room-settings-sync', {
         isLocked: settings.isLocked,
         isWaitingRoomEnabled: settings.isWaitingRoomEnabled,
         waitingUsers: settings.waitingUsers
       });
+
+      // Send initial shared notes
+      if (roomNotes[activeRoomId]) {
+        socket.emit('notes-updated', { content: roomNotes[activeRoomId], updatedBy: 'System' });
+      }
     });
 
     // ==========================================
-    // 2. WAITING ROOM ADMIT & DENY (HOST CONTROLS)
+    // 2. WAITING ROOM ADMIT & DENY
     // ==========================================
     socket.on('admit-user', ({ roomId, roomID, targetSocketId }) => {
       const activeRoomId = roomId || roomID;
@@ -121,7 +121,6 @@ export const handleSocketConnections = (io) => {
 
       const admittedUser = settings.waitingUsers.splice(userIndex, 1)[0];
 
-      // Update host with remaining waiting queue
       if (settings.hostSocketId) {
         io.to(settings.hostSocketId).emit('waiting-users-updated', settings.waitingUsers);
       }
@@ -147,13 +146,11 @@ export const handleSocketConnections = (io) => {
         }
         roomParticipants[activeRoomId].push(newParticipant);
 
-        // Tell admitted user they are in
         targetSocket.emit('user-admitted', {
           roomId: activeRoomId,
           existingUsers: roomParticipants[activeRoomId].filter(p => p.socketId !== targetSocketId)
         });
 
-        // Broadcast to all other peers in room
         targetSocket.to(activeRoomId).emit('user-joined', newParticipant);
       }
     });
@@ -178,7 +175,7 @@ export const handleSocketConnections = (io) => {
     });
 
     // ==========================================
-    // 3. HOST MODERATION (Mute User / Mute All / Kick / Lock / Waiting Room)
+    // 3. HOST MODERATION (Mute / Kick / Lock / Lobby)
     // ==========================================
     socket.on('mute-user', ({ roomId, roomID, targetSocketId }) => {
       io.to(targetSocketId).emit('force-muted', {
@@ -195,18 +192,15 @@ export const handleSocketConnections = (io) => {
 
     socket.on('kick-user', ({ roomId, roomID, targetSocketId }) => {
       const activeRoomId = roomId || roomID;
-
       io.to(targetSocketId).emit('user-kicked', {
         message: "You have been removed from the meeting by the host."
       });
 
-      // Disconnect socket from room
       const targetSocket = io.sockets.sockets.get(targetSocketId);
       if (targetSocket) {
         targetSocket.leave(activeRoomId);
       }
 
-      // Remove from participants
       if (roomParticipants[activeRoomId]) {
         const idx = roomParticipants[activeRoomId].findIndex(p => p.socketId === targetSocketId);
         if (idx !== -1) {
@@ -226,7 +220,6 @@ export const handleSocketConnections = (io) => {
         roomSettings[activeRoomId] = { isLocked: false, isWaitingRoomEnabled: false, hostSocketId: socket.id, waitingUsers: [] };
       }
       roomSettings[activeRoomId].isLocked = isLocked;
-
       io.to(activeRoomId).emit('room-lock-changed', { isLocked });
     });
 
@@ -236,12 +229,33 @@ export const handleSocketConnections = (io) => {
         roomSettings[activeRoomId] = { isLocked: false, isWaitingRoomEnabled: false, hostSocketId: socket.id, waitingUsers: [] };
       }
       roomSettings[activeRoomId].isWaitingRoomEnabled = isWaitingRoomEnabled;
-
       io.to(activeRoomId).emit('waiting-room-changed', { isWaitingRoomEnabled });
     });
 
     // ==========================================
-    // 4. WEBRTC SIGNALING (Offers, Answers, ICE)
+    // 4. COLLABORATIVE WHITEBOARD
+    // ==========================================
+    socket.on('draw-line', ({ roomId, roomID, prevPoint, currentPoint, color, width, mode }) => {
+      const activeRoomId = roomId || roomID;
+      socket.to(activeRoomId).emit('draw-line', { prevPoint, currentPoint, color, width, mode });
+    });
+
+    socket.on('clear-whiteboard', ({ roomId, roomID }) => {
+      const activeRoomId = roomId || roomID;
+      socket.to(activeRoomId).emit('whiteboard-cleared');
+    });
+
+    // ==========================================
+    // 5. LIVE SHARED MEETING NOTES
+    // ==========================================
+    socket.on('notes-update', ({ roomId, roomID, content, updatedBy }) => {
+      const activeRoomId = roomId || roomID;
+      roomNotes[activeRoomId] = content;
+      socket.to(activeRoomId).emit('notes-updated', { content, updatedBy });
+    });
+
+    // ==========================================
+    // 6. WEBRTC SIGNALING
     // ==========================================
     socket.on('offer', ({ targetSocketId, callerSocketId, sdp, callerUser }) => {
       io.to(targetSocketId).emit('offer', {
@@ -265,16 +279,8 @@ export const handleSocketConnections = (io) => {
       });
     });
 
-    socket.on('sending-signal', ({ userToSignal, signal, callerId, callerName }) => {
-      io.to(userToSignal).emit('user-joined-signal', { signal, callerId, callerName });
-    });
-
-    socket.on('returning-signal', ({ callerId, signal }) => {
-      io.to(callerId).emit('receiving-returned-signal', { signal, id: socket.id });
-    });
-
     // ==========================================
-    // 5. MEDIA STATUS TOGGLES
+    // 7. MEDIA STATUS TOGGLES
     // ==========================================
     socket.on('toggle-audio', ({ roomId, roomID, audioEnabled }) => {
       const activeRoomId = roomId || roomID;
@@ -294,21 +300,7 @@ export const handleSocketConnections = (io) => {
       socket.to(activeRoomId).emit('user-toggled-video', { socketId: socket.id, videoEnabled });
     });
 
-    socket.on('toggle-media', ({ roomID, roomId, audioEnabled, videoEnabled }) => {
-      const activeRoomId = roomID || roomId;
-      if (roomParticipants[activeRoomId]) {
-        const p = roomParticipants[activeRoomId].find(u => u.socketId === socket.id);
-        if (p) {
-          p.audioEnabled = audioEnabled;
-          p.videoEnabled = videoEnabled;
-        }
-      }
-      socket.to(activeRoomId).emit('peer-media-toggled', { socketId: socket.id, audioEnabled, videoEnabled });
-    });
-
-    // ==========================================
-    // 6. SCREEN SHARING TOGGLE
-    // ==========================================
+    // Screen sharing
     socket.on('toggle-screen-share', ({ roomId, roomID, isSharing }) => {
       const activeRoomId = roomId || roomID;
       if (roomParticipants[activeRoomId]) {
@@ -321,9 +313,7 @@ export const handleSocketConnections = (io) => {
       });
     });
 
-    // ==========================================
-    // 7. RAISE HAND EVENT
-    // ==========================================
+    // Raise hand
     socket.on('raise-hand', ({ roomId, roomID, isHandRaised, userName, userId }) => {
       const activeRoomId = roomId || roomID;
       if (roomParticipants[activeRoomId]) {
@@ -338,9 +328,7 @@ export const handleSocketConnections = (io) => {
       });
     });
 
-    // ==========================================
-    // 8. LIVE FLOATING EMOJI REACTIONS
-    // ==========================================
+    // Reactions
     socket.on('send-reaction', ({ roomId, roomID, emoji, userName }) => {
       const activeRoomId = roomId || roomID;
       io.to(activeRoomId).emit('receive-reaction', {
@@ -353,16 +341,17 @@ export const handleSocketConnections = (io) => {
     });
 
     // ==========================================
-    // 9. PERSISTENT LIVE CHAT
+    // 8. LIVE CHAT & FILE ATTACHMENTS
     // ==========================================
     socket.on('send-message', async ({ roomID, roomId, message }) => {
       const activeRoomId = roomID || roomId;
-      const { senderId, senderName, text } = message;
+      const { senderId, senderName, text, file } = message;
 
       try {
+        const saveText = file ? `[Attachment: ${file.name}] ${text || ''}` : text;
         await pool.query(
           "INSERT INTO messages (meeting_id, sender_id, sender_name, text) VALUES ($1, $2, $3, $4)",
-          [activeRoomId, senderId, senderName, text]
+          [activeRoomId, senderId, senderName, saveText]
         );
       } catch (err) {
         console.error("Database chat message persistence failed:", err.message);
@@ -372,7 +361,7 @@ export const handleSocketConnections = (io) => {
     });
 
     // ==========================================
-    // 10. END MEETING (HOST ACTION)
+    // 9. END MEETING
     // ==========================================
     socket.on('end-meeting', async ({ roomId, roomID }) => {
       const activeRoomId = roomId || roomID;
@@ -390,10 +379,11 @@ export const handleSocketConnections = (io) => {
       });
       delete roomParticipants[activeRoomId];
       delete roomSettings[activeRoomId];
+      delete roomNotes[activeRoomId];
     });
 
     // ==========================================
-    // 11. DISCONNECTION & CLEANUP
+    // 10. DISCONNECTION & CLEANUP
     // ==========================================
     const handleDisconnect = () => {
       for (const rId in roomParticipants) {
@@ -415,7 +405,6 @@ export const handleSocketConnections = (io) => {
         }
       }
 
-      // Also cleanup waiting users if they disconnect before admission
       for (const rId in roomSettings) {
         if (roomSettings[rId]?.waitingUsers) {
           const prevLen = roomSettings[rId].waitingUsers.length;
