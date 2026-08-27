@@ -10,9 +10,9 @@ const ICE_SERVERS = {
     ],
 };
 
-export const useWebRTC = (roomId, user, onMeetingEnded, enabled = true) => {
+export const useWebRTC = (roomId, user, onMeetingEnded, enabled = true, isHost = false) => {
     const [localStream, setLocalStream] = useState(null);
-    const [remoteUsers, setRemoteUsers] = useState([]); // Array of { socketId, userId, userName, stream, audioEnabled, videoEnabled, isHandRaised, isScreenSharing }
+    const [remoteUsers, setRemoteUsers] = useState([]); // Array of { socketId, userId, userName, stream, audioEnabled, videoEnabled, isHandRaised, isScreenSharing, isHost }
     const [audioEnabled, setAudioEnabled] = useState(true);
     const [videoEnabled, setVideoEnabled] = useState(true);
     
@@ -23,6 +23,12 @@ export const useWebRTC = (roomId, user, onMeetingEnded, enabled = true) => {
     // Raise Hand & Reactions State
     const [isHandRaised, setIsHandRaised] = useState(false);
     const [reactions, setReactions] = useState([]); // Array of { id, emoji, userName, timestamp }
+
+    // Host Moderation State
+    const [isWaitingInLobby, setIsWaitingInLobby] = useState(false);
+    const [isRoomLocked, setIsRoomLocked] = useState(false);
+    const [isWaitingRoomEnabled, setIsWaitingRoomEnabled] = useState(false);
+    const [waitingUsers, setWaitingUsers] = useState([]); // [{ socketId, userId, userName }]
 
     const peersRef = useRef(new Map()); // socketId -> RTCPeerConnection
     const localStreamRef = useRef(null);
@@ -39,7 +45,6 @@ export const useWebRTC = (roomId, user, onMeetingEnded, enabled = true) => {
             return stream;
         } catch (error) {
             console.warn("Camera/microphone primary access note:", error.message);
-            // Fallback: try audio only or video only
             try {
                 const audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
                 localStreamRef.current = audioStream;
@@ -53,7 +58,7 @@ export const useWebRTC = (roomId, user, onMeetingEnded, enabled = true) => {
         }
     }, []);
 
-    // Helper: Swap video track across all active RTCPeerConnection sender tracks
+    // Swap video track across all active RTCPeerConnection sender tracks
     const replaceTrackOnPeers = useCallback((newVideoTrack) => {
         peersRef.current.forEach((peer) => {
             const sender = peer.getSenders().find((s) => s.track && s.track.kind === "video");
@@ -108,12 +113,13 @@ export const useWebRTC = (roomId, user, onMeetingEnded, enabled = true) => {
                         {
                             socketId: targetSocketId,
                             userId: targetUser?.userId,
-                            userName: targetUser?.userName || "Participant",
+                            userName: targetUser?.userName || targetUser?.username || "Participant",
                             stream: remoteStream,
                             audioEnabled: targetUser?.audioEnabled ?? true,
                             videoEnabled: targetUser?.videoEnabled ?? true,
                             isHandRaised: targetUser?.isHandRaised ?? false,
                             isScreenSharing: targetUser?.isScreenSharing ?? false,
+                            isHost: targetUser?.isHost ?? false,
                         },
                     ];
                 }
@@ -145,6 +151,7 @@ export const useWebRTC = (roomId, user, onMeetingEnded, enabled = true) => {
                 user,
                 audioEnabled: true,
                 videoEnabled: true,
+                isHost,
             });
 
             // 1. Receive all existing users in room
@@ -238,7 +245,6 @@ export const useWebRTC = (roomId, user, onMeetingEnded, enabled = true) => {
             // 9. Handle Floating Reaction
             socket.on("receive-reaction", (reactionData) => {
                 setReactions((prev) => [...prev, reactionData]);
-                // Clean up reaction after 4 seconds
                 setTimeout(() => {
                     setReactions((prev) => prev.filter((r) => r.id !== reactionData.id));
                 }, 4000);
@@ -257,7 +263,101 @@ export const useWebRTC = (roomId, user, onMeetingEnded, enabled = true) => {
                 setRemoteUsers((prev) => prev.filter((u) => u.socketId !== socketId));
             });
 
-            // 11. Handle meeting ended
+            // ====================================================
+            // 11. HOST MODERATION INCOMING EVENTS
+            // ====================================================
+            // Muted by host
+            socket.on("force-muted", ({ message }) => {
+                if (localStreamRef.current) {
+                    const audioTrack = localStreamRef.current.getAudioTracks()[0];
+                    if (audioTrack) {
+                        audioTrack.enabled = false;
+                        setAudioEnabled(false);
+                    }
+                }
+                toast(message || "You have been muted by the host.", { icon: "🔇" });
+            });
+
+            // Kicked by host
+            socket.on("user-kicked", ({ message }) => {
+                toast.error(message || "You have been removed from the meeting by the host.");
+                if (onMeetingEnded) {
+                    onMeetingEnded(message);
+                }
+            });
+
+            // Meeting locked
+            socket.on("meeting-locked", ({ message }) => {
+                toast.error(message || "This meeting is locked by the host.");
+                if (onMeetingEnded) {
+                    onMeetingEnded(message);
+                }
+            });
+
+            // Guest waiting in lobby
+            socket.on("waiting-in-lobby", () => {
+                setIsWaitingInLobby(true);
+            });
+
+            // Guest admitted by host
+            socket.on("user-admitted", ({ existingUsers }) => {
+                setIsWaitingInLobby(false);
+                toast.success("Host admitted you to the meeting!");
+
+                // Connect to existing peers
+                if (existingUsers && Array.isArray(existingUsers)) {
+                    existingUsers.forEach((existingUser) => {
+                        const peer = createPeerConnection(existingUser.socketId, existingUser);
+                        peer.createOffer()
+                            .then((offer) => peer.setLocalDescription(offer))
+                            .then(() => {
+                                socket.emit("offer", {
+                                    targetSocketId: existingUser.socketId,
+                                    callerSocketId: socket.id,
+                                    sdp: peer.localDescription,
+                                });
+                            })
+                            .catch((err) => console.error("Error creating offer:", err));
+                    });
+                }
+            });
+
+            // Guest denied by host
+            socket.on("user-denied", ({ message }) => {
+                setIsWaitingInLobby(false);
+                toast.error(message || "The host denied your request to join.");
+                if (onMeetingEnded) {
+                    onMeetingEnded(message);
+                }
+            });
+
+            // Host receives updated waiting list
+            socket.on("waiting-users-updated", (usersList) => {
+                setWaitingUsers(usersList || []);
+                if (usersList && usersList.length > 0) {
+                    const latest = usersList[usersList.length - 1];
+                    toast(`${latest.userName} is waiting to join`, { icon: "🚪" });
+                }
+            });
+
+            // Room settings sync
+            socket.on("room-settings-sync", ({ isLocked, isWaitingRoomEnabled, waitingUsers: currentWaiting }) => {
+                setIsRoomLocked(isLocked ?? false);
+                setIsWaitingRoomEnabled(isWaitingRoomEnabled ?? false);
+                if (currentWaiting) setWaitingUsers(currentWaiting);
+            });
+
+            socket.on("room-lock-changed", ({ isLocked }) => {
+                setIsRoomLocked(isLocked);
+                toast(isLocked ? "Meeting is now locked 🔒" : "Meeting is unlocked 🔓");
+            });
+
+            socket.on("waiting-room-changed", ({ isWaitingRoomEnabled }) => {
+                setIsWaitingRoomEnabled(isWaitingRoomEnabled);
+                toast(isWaitingRoomEnabled ? "Waiting room enabled 🚪" : "Waiting room disabled");
+            });
+
+            // 12. Handle meeting ended
             socket.on("meeting-ended", ({ message }) => {
                 toast.error(message || "This meeting has ended");
                 if (onMeetingEnded) {
@@ -294,11 +394,21 @@ export const useWebRTC = (roomId, user, onMeetingEnded, enabled = true) => {
             socket.off("user-raised-hand");
             socket.off("receive-reaction");
             socket.off("user-left");
+            socket.off("force-muted");
+            socket.off("user-kicked");
+            socket.off("meeting-locked");
+            socket.off("waiting-in-lobby");
+            socket.off("user-admitted");
+            socket.off("user-denied");
+            socket.off("waiting-users-updated");
+            socket.off("room-settings-sync");
+            socket.off("room-lock-changed");
+            socket.off("waiting-room-changed");
             socket.off("meeting-ended");
 
             socket.disconnect();
         };
-    }, [roomId, user?.id, enabled, createPeerConnection, initLocalStream, onMeetingEnded]);
+    }, [roomId, user?.id, enabled, isHost, createPeerConnection, initLocalStream, onMeetingEnded]);
 
     // ====================================================
     // SCREEN SHARING CONTROLS
@@ -313,15 +423,11 @@ export const useWebRTC = (roomId, user, onMeetingEnded, enabled = true) => {
             screenStreamRef.current = screenStream;
             const screenVideoTrack = screenStream.getVideoTracks()[0];
 
-            // When user clicks the browser's built-in "Stop sharing" button
             screenVideoTrack.onended = () => {
                 stopScreenShare();
             };
 
-            // Replace video track on all active peer connections
             replaceTrackOnPeers(screenVideoTrack);
-
-            // Update local stream state for user preview
             setLocalStream(screenStream);
             setIsScreenSharing(true);
 
@@ -341,7 +447,6 @@ export const useWebRTC = (roomId, user, onMeetingEnded, enabled = true) => {
             screenStreamRef.current = null;
         }
 
-        // Restore original camera video track
         if (localStreamRef.current) {
             const cameraVideoTrack = localStreamRef.current.getVideoTracks()[0];
             if (cameraVideoTrack) {
@@ -396,18 +501,58 @@ export const useWebRTC = (roomId, user, onMeetingEnded, enabled = true) => {
             timestamp: Date.now(),
         };
 
-        // Local state
         setReactions((prev) => [...prev, reactionData]);
         setTimeout(() => {
             setReactions((prev) => prev.filter((r) => r.id !== reactionData.id));
         }, 4000);
 
-        // Broadcast to peers
         socket.emit("send-reaction", {
             roomId,
             emoji,
             userName: user?.fullName || user?.name || "Participant",
         });
+    };
+
+    // ====================================================
+    // HOST MODERATION METHODS
+    // ====================================================
+    const muteParticipant = (targetSocketId) => {
+        socket.emit("mute-user", { roomId, targetSocketId });
+        toast("Participant muted");
+    };
+
+    const muteAll = () => {
+        socket.emit("mute-all", { roomId });
+        toast("Muted all participants");
+    };
+
+    const kickParticipant = (targetSocketId) => {
+        socket.emit("kick-user", { roomId, targetSocketId });
+        toast("Participant removed from meeting");
+    };
+
+    const toggleLockMeeting = () => {
+        const nextState = !isRoomLocked;
+        setIsRoomLocked(nextState);
+        socket.emit("toggle-lock-meeting", { roomId, isLocked: nextState });
+    };
+
+    const toggleWaitingRoom = () => {
+        const nextState = !isWaitingRoomEnabled;
+        setIsWaitingRoomEnabled(nextState);
+        socket.emit("toggle-waiting-room", { roomId, isWaitingRoomEnabled: nextState });
+    };
+
+    const admitUser = (targetSocketId) => {
+        socket.emit("admit-user", { roomId, targetSocketId });
+        setWaitingUsers((prev) => prev.filter((u) => u.socketId !== targetSocketId));
+        toast.success("Admitted participant");
+    };
+
+    const denyUser = (targetSocketId) => {
+        socket.emit("deny-user", { roomId, targetSocketId });
+        setWaitingUsers((prev) => prev.filter((u) => u.socketId !== targetSocketId));
+        toast("Denied participant access");
     };
 
     // ====================================================
@@ -452,11 +597,22 @@ export const useWebRTC = (roomId, user, onMeetingEnded, enabled = true) => {
         isScreenSharing,
         isHandRaised,
         reactions,
+        isWaitingInLobby,
+        isRoomLocked,
+        isWaitingRoomEnabled,
+        waitingUsers,
         toggleAudio,
         toggleVideo,
         toggleScreenShare,
         toggleRaiseHand,
         sendReaction,
+        muteParticipant,
+        muteAll,
+        kickParticipant,
+        toggleLockMeeting,
+        toggleWaitingRoom,
+        admitUser,
+        denyUser,
         endMeeting,
     };
 };
