@@ -60,10 +60,14 @@ app.use('/api/upload', uploadRoutes);
 // Configure Socket.io server for WebRTC signaling and Live Chat
 const io = new Server(httpServer, {
   cors: {
-    origin: "*",
+    origin: (origin, callback) => {
+      // Allow any requesting origin (localhost, Vercel, mobile browsers)
+      callback(null, true);
+    },
     methods: ['GET', 'POST'],
     credentials: true
-  }
+  },
+  transports: ['websocket', 'polling']
 });
 
 // Manage Socket.io connections
