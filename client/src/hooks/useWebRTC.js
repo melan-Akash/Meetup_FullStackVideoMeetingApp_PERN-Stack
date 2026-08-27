@@ -10,6 +10,7 @@ const ICE_SERVERS = {
         { urls: "stun:stun2.l.google.com:19302" },
         { urls: "stun:stun3.l.google.com:19302" },
         { urls: "stun:stun4.l.google.com:19302" },
+        { urls: "stun:global.stun.twilio.com:3478" }
     ],
 };
 
@@ -25,16 +26,17 @@ export const useWebRTC = (roomId, user, onMeetingEnded, enabled = true, isHost =
 
     // Raise Hand & Reactions State
     const [isHandRaised, setIsHandRaised] = useState(false);
-    const [reactions, setReactions] = useState([]); // Array of { id, emoji, userName, timestamp }
+    const [reactions, setReactions] = useState([]);
 
     // Host Moderation State
     const [isWaitingInLobby, setIsWaitingInLobby] = useState(false);
     const [isRoomLocked, setIsRoomLocked] = useState(false);
     const [isWaitingRoomEnabled, setIsWaitingRoomEnabled] = useState(false);
-    const [waitingUsers, setWaitingUsers] = useState([]); // [{ socketId, userId, userName }]
+    const [waitingUsers, setWaitingUsers] = useState([]);
 
     const peersRef = useRef(new Map()); // socketId -> RTCPeerConnection
     const candidateQueueRef = useRef(new Map()); // socketId -> RTCIceCandidate[]
+    const remoteStreamsMap = useRef(new Map()); // socketId -> MediaStream
     const localStreamRef = useRef(null);
 
     // Helper to flush queued ICE candidates
@@ -113,9 +115,17 @@ export const useWebRTC = (roomId, user, onMeetingEnded, enabled = true, isHost =
             }
         };
 
-        // Handle incoming remote stream tracks
+        // Handle incoming remote stream tracks (Support both event.streams and track events)
         peer.ontrack = (event) => {
-            const remoteStream = event.streams[0];
+            let remoteStream = event.streams[0];
+            if (!remoteStream) {
+                if (!remoteStreamsMap.current.has(targetSocketId)) {
+                    remoteStreamsMap.current.set(targetSocketId, new MediaStream());
+                }
+                remoteStream = remoteStreamsMap.current.get(targetSocketId);
+                remoteStream.addTrack(event.track);
+            }
+
             setRemoteUsers((prev) => {
                 const existingIndex = prev.findIndex((u) => u.socketId === targetSocketId);
                 if (existingIndex > -1) {
@@ -150,7 +160,7 @@ export const useWebRTC = (roomId, user, onMeetingEnded, enabled = true, isHost =
         // Store peer
         peersRef.current.set(targetSocketId, peer);
 
-        // Also register in remoteUsers state so name/avatar appear immediately
+        // Register in remoteUsers state so participant name/card renders immediately
         setRemoteUsers((prev) => {
             if (prev.some((u) => u.socketId === targetSocketId)) return prev;
             return [
@@ -184,10 +194,6 @@ export const useWebRTC = (roomId, user, onMeetingEnded, enabled = true, isHost =
 
             if (!isMounted) return;
 
-            if (!socket.connected) {
-                socket.connect();
-            }
-
             // Log join to PostgreSQL
             if (user?.id) {
                 api.post('/meetings/join-log', {
@@ -206,15 +212,27 @@ export const useWebRTC = (roomId, user, onMeetingEnded, enabled = true, isHost =
                 avatarUrl: user?.imageUrl || null
             };
 
-            // Emit join room
-            socket.emit("join-room", {
-                roomId,
-                roomID: roomId,
-                user: currentUserData,
-                audioEnabled: true,
-                videoEnabled: true,
-                isHost,
-            });
+            const emitJoin = () => {
+                socket.emit("join-room", {
+                    roomId,
+                    roomID: roomId,
+                    user: currentUserData,
+                    audioEnabled: true,
+                    videoEnabled: true,
+                    isHost,
+                });
+            };
+
+            // Ensure socket is connected and then emit join-room
+            if (socket.connected) {
+                emitJoin();
+            } else {
+                socket.once("connect", emitJoin);
+                socket.connect();
+            }
+
+            // Also re-join on reconnection
+            socket.on("connect", emitJoin);
 
             // 1. Receive all existing users in room
             socket.on("all-users", (existingUsers) => {
@@ -265,7 +283,7 @@ export const useWebRTC = (roomId, user, onMeetingEnded, enabled = true, isHost =
             });
 
             // 4. Receive answer
-            socket.on("answer", async ({ responderSocketId, sdp, responderUser }) => {
+            socket.on("answer", async ({ responderSocketId, sdp }) => {
                 const peer = peersRef.current.get(responderSocketId);
                 if (peer) {
                     try {
@@ -277,7 +295,7 @@ export const useWebRTC = (roomId, user, onMeetingEnded, enabled = true, isHost =
                 }
             });
 
-            // 5. Receive ICE candidate with queueing
+            // 5. Receive ICE candidate with robust queueing
             socket.on("ice-candidate", async ({ senderSocketId, candidate }) => {
                 if (!candidate) return;
                 const peer = peersRef.current.get(senderSocketId);
@@ -289,7 +307,6 @@ export const useWebRTC = (roomId, user, onMeetingEnded, enabled = true, isHost =
                         console.warn("Error adding ICE candidate:", err);
                     }
                 } else {
-                    // Queue candidate until remoteDescription is set
                     const queue = candidateQueueRef.current.get(senderSocketId) || [];
                     queue.push(new RTCIceCandidate(candidate));
                     candidateQueueRef.current.set(senderSocketId, queue);
@@ -337,6 +354,7 @@ export const useWebRTC = (roomId, user, onMeetingEnded, enabled = true, isHost =
                     peersRef.current.delete(socketId);
                 }
                 candidateQueueRef.current.delete(socketId);
+                remoteStreamsMap.current.delete(socketId);
                 setRemoteUsers((prev) => prev.filter((u) => u.socketId !== socketId));
             });
 
@@ -431,6 +449,7 @@ export const useWebRTC = (roomId, user, onMeetingEnded, enabled = true, isHost =
             peersRef.current.forEach((peer) => peer.close());
             peersRef.current.clear();
             candidateQueueRef.current.clear();
+            remoteStreamsMap.current.clear();
 
             // Stop local tracks
             if (localStreamRef.current) {
@@ -441,6 +460,7 @@ export const useWebRTC = (roomId, user, onMeetingEnded, enabled = true, isHost =
             }
 
             // Remove socket listeners
+            socket.off("connect");
             socket.off("all-users");
             socket.off("user-joined");
             socket.off("offer");
