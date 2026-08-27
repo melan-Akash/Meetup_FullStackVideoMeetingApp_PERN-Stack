@@ -1,7 +1,7 @@
 import pool from '../config/db.js';
 
 export const handleSocketConnections = (io) => {
-  // Active participants per room: { roomID: [{ socketId, userId, userName, audioEnabled, videoEnabled }] }
+  // Active participants per room: { roomID: [{ socketId, userId, userName, audioEnabled, videoEnabled, isHandRaised, isScreenSharing }] }
   const roomParticipants = {};
 
   io.on('connection', (socket) => {
@@ -25,7 +25,9 @@ export const handleSocketConnections = (io) => {
         userName: activeUserName,
         username: activeUserName,
         audioEnabled,
-        videoEnabled
+        videoEnabled,
+        isHandRaised: false,
+        isScreenSharing: false
       };
 
       if (!roomParticipants[activeRoomId]) {
@@ -113,7 +115,53 @@ export const handleSocketConnections = (io) => {
     });
 
     // ==========================================
-    // 4. PERSISTENT LIVE CHAT
+    // 4. SCREEN SHARING TOGGLE
+    // ==========================================
+    socket.on('toggle-screen-share', ({ roomId, roomID, isSharing }) => {
+      const activeRoomId = roomId || roomID;
+      if (roomParticipants[activeRoomId]) {
+        const p = roomParticipants[activeRoomId].find(u => u.socketId === socket.id);
+        if (p) p.isScreenSharing = isSharing;
+      }
+      socket.to(activeRoomId).emit('user-screen-share-toggled', { 
+        socketId: socket.id, 
+        isSharing 
+      });
+    });
+
+    // ==========================================
+    // 5. RAISE HAND EVENT
+    // ==========================================
+    socket.on('raise-hand', ({ roomId, roomID, isHandRaised, userName, userId }) => {
+      const activeRoomId = roomId || roomID;
+      if (roomParticipants[activeRoomId]) {
+        const p = roomParticipants[activeRoomId].find(u => u.socketId === socket.id);
+        if (p) p.isHandRaised = isHandRaised;
+      }
+      socket.to(activeRoomId).emit('user-raised-hand', {
+        socketId: socket.id,
+        userId,
+        userName,
+        isHandRaised
+      });
+    });
+
+    // ==========================================
+    // 6. LIVE FLOATING EMOJI REACTIONS
+    // ==========================================
+    socket.on('send-reaction', ({ roomId, roomID, emoji, userName }) => {
+      const activeRoomId = roomId || roomID;
+      io.to(activeRoomId).emit('receive-reaction', {
+        id: `react_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+        socketId: socket.id,
+        userName: userName || 'Someone',
+        emoji,
+        timestamp: Date.now()
+      });
+    });
+
+    // ==========================================
+    // 7. PERSISTENT LIVE CHAT
     // ==========================================
     socket.on('send-message', async ({ roomID, roomId, message }) => {
       const activeRoomId = roomID || roomId;
@@ -132,7 +180,7 @@ export const handleSocketConnections = (io) => {
     });
 
     // ==========================================
-    // 5. END MEETING (HOST ACTION)
+    // 8. END MEETING (HOST ACTION)
     // ==========================================
     socket.on('end-meeting', async ({ roomId, roomID }) => {
       const activeRoomId = roomId || roomID;
@@ -152,7 +200,7 @@ export const handleSocketConnections = (io) => {
     });
 
     // ==========================================
-    // 6. DISCONNECTION & CLEANUP
+    // 9. DISCONNECTION & CLEANUP
     // ==========================================
     const handleDisconnect = () => {
       for (const rId in roomParticipants) {

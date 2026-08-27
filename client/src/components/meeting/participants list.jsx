@@ -1,5 +1,5 @@
 import React from 'react';
-import { X, Mic, MicOff, Video, VideoOff, Crown } from 'lucide-react';
+import { X, Mic, MicOff, Video, VideoOff, Crown, Monitor } from 'lucide-react';
 
 export default function ParticipantsList({
   isOpen,
@@ -7,6 +7,8 @@ export default function ParticipantsList({
   localUser,
   localAudio,
   localVideo,
+  localIsHandRaised,
+  localIsScreenSharing,
   remoteUsers,
   meetingHostID
 }) {
@@ -41,6 +43,8 @@ export default function ParticipantsList({
               <p className="text-xs font-bold text-slate-900 flex items-center gap-1">
                 <span>{localUser?.fullName || 'Guest'}</span>
                 <Crown className="w-3 h-3 text-amber-500" />
+                {localIsHandRaised && <span className="text-sm">✋</span>}
+                {localIsScreenSharing && <Monitor className="w-3 h-3 text-blue-600" />}
               </p>
               <p className="text-[10px] text-slate-500 font-medium">Host (You)</p>
             </div>
@@ -84,6 +88,8 @@ export default function ParticipantsList({
                     <p className="text-xs font-bold text-slate-800 flex items-center gap-1">
                       <span>{p.userName || p.username || 'Participant'}</span>
                       {isHost && <Crown className="w-3 h-3 text-amber-500" />}
+                      {p.isHandRaised && <span className="text-sm animate-bounce">✋</span>}
+                      {p.isScreenSharing && <Monitor className="w-3 h-3 text-blue-600" />}
                     </p>
                     <p className="text-[9px] text-slate-400 font-medium">Participant</p>
                   </div>

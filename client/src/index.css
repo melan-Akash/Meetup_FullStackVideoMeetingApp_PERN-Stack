@@ -61,6 +61,33 @@
     box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.02);
 }
 
+/* Floating Emoji Keyframes */
+@keyframes floatUp {
+    0% {
+        opacity: 0;
+        transform: translateY(20px) scale(0.6);
+    }
+    15% {
+        opacity: 1;
+        transform: translateY(0) scale(1.15);
+    }
+    30% {
+        transform: translateY(-40px) scale(1);
+    }
+    70% {
+        opacity: 0.9;
+        transform: translateY(-140px) scale(0.95);
+    }
+    100% {
+        opacity: 0;
+        transform: translateY(-240px) scale(0.8);
+    }
+}
+
+.animate-float-up {
+    animation: floatUp 3.5s ease-out forwards;
+}
+
 /* Custom Scrollbar */
 ::-webkit-scrollbar {
     width: 6px;

@@ -7,6 +7,7 @@ import VideoGrid from '../components/meeting/video grid.jsx';
 import ChatPanel from '../components/meeting/chat panel.jsx';
 import ParticipantsList from '../components/meeting/participants list.jsx';
 import ControlBar from '../components/meeting/controlbar.jsx';
+import ReactionsOverlay from '../components/meeting/reactions overlay.jsx';
 import { toast } from 'react-hot-toast';
 
 export default function MeetingRoom() {
@@ -24,8 +25,14 @@ export default function MeetingRoom() {
     remoteUsers,
     audioEnabled,
     videoEnabled,
+    isScreenSharing,
+    isHandRaised,
+    reactions,
     toggleAudio,
     toggleVideo,
+    toggleScreenShare,
+    toggleRaiseHand,
+    sendReaction,
     endMeeting
   } = useWebRTC(roomID, user, handleMeetingEnded);
 
@@ -44,20 +51,25 @@ export default function MeetingRoom() {
   }, []);
 
   return (
-    <div className="flex flex-col h-screen bg-[#f0f4f8] text-slate-900 overflow-hidden select-none">
+    <div className="flex flex-col h-screen bg-[#f0f4f8] text-slate-900 overflow-hidden select-none relative">
       
       {/* Top Header */}
       <header className="px-8 py-3.5 flex items-center justify-between shrink-0 bg-white/70 backdrop-blur-md border-b border-slate-200/80">
         <div className="flex items-center gap-2">
           <h2 className="text-sm font-bold text-slate-800 flex items-center gap-2">
-            <span>Instant Meeting ({roomID})</span>
+            <span>Meeting Room ({roomID})</span>
             <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
           </h2>
         </div>
       </header>
 
-      {/* Central Interactive Grid */}
+      {/* Central Interactive Video Stage */}
       <div className="grow flex relative overflow-hidden">
+        
+        {/* Floating Emoji Reactions Overlay */}
+        <ReactionsOverlay reactions={reactions} />
+
+        {/* Video Grid Feed */}
         <div className="grow flex items-center justify-center p-6 sm:p-8">
           <VideoGrid
             localStream={localStream}
@@ -65,10 +77,12 @@ export default function MeetingRoom() {
             remoteUsers={remoteUsers}
             audioEnabled={audioEnabled}
             videoEnabled={videoEnabled}
+            isLocalHandRaised={isHandRaised}
+            isLocalScreenSharing={isScreenSharing}
           />
         </div>
 
-        {/* Dynamic sliding panels */}
+        {/* Live Chat Sliding Drawer */}
         <ChatPanel
           isOpen={isChatOpen}
           onClose={toggleChat}
@@ -77,24 +91,32 @@ export default function MeetingRoom() {
           currentUser={user}
         />
 
+        {/* Participants List Sliding Drawer */}
         <ParticipantsList
           isOpen={isParticipantsOpen}
           onClose={toggleParticipants}
           localUser={user}
           localAudio={audioEnabled}
           localVideo={videoEnabled}
+          localIsHandRaised={isHandRaised}
+          localIsScreenSharing={isScreenSharing}
           remoteUsers={remoteUsers}
           meetingHostID={user?.id}
         />
       </div>
 
-      {/* Floating Toolbar control */}
+      {/* Meeting Toolbar Controls */}
       <ControlBar
         roomID={roomID}
         audioEnabled={audioEnabled}
         videoEnabled={videoEnabled}
+        isScreenSharing={isScreenSharing}
+        isHandRaised={isHandRaised}
         onToggleAudio={toggleAudio}
         onToggleVideo={toggleVideo}
+        onToggleScreenShare={toggleScreenShare}
+        onToggleRaiseHand={toggleRaiseHand}
+        onSendReaction={sendReaction}
         onToggleChat={toggleChat}
         onToggleParticipants={toggleParticipants}
         isChatOpen={isChatOpen}
