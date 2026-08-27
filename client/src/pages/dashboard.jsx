@@ -162,7 +162,7 @@ export default function Dashboard() {
             {/* Join Meeting Input Pill */}
             <form 
               onSubmit={handleJoinMeeting}
-              className="grow flex items-center gap-2 bg-white/80 backdrop-blur-md border border-white/90 rounded-full pl-3.5 pr-1.5 py-1.5 shadow-2xs min-w-[240px]"
+              className="grow flex items-center gap-2 bg-white/80 backdrop-blur-md border border-white/90 rounded-full pl-3.5 pr-1.5 py-1.5 shadow-2xs min-w-60"
             >
               <Keyboard className="w-4 h-4 text-slate-400 shrink-0" />
               <input

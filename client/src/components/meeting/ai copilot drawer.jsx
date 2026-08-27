@@ -76,7 +76,7 @@ export default function AICoPilotDrawer({
     <div className="w-80 md:w-96 border-l border-slate-200/90 bg-white/95 backdrop-blur-xl h-full flex flex-col shrink-0 shadow-lg z-30 transition-all duration-300">
       
       {/* Header */}
-      <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-gradient-to-r from-blue-50/50 via-white to-purple-50/50">
+      <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-linear-to-r from-blue-50/50 via-white to-purple-50/50">
         <div className="flex items-center gap-2">
           <div className="p-1.5 rounded-xl bg-[#0055ff] text-white shadow-xs">
             <Sparkles className="w-4 h-4" />

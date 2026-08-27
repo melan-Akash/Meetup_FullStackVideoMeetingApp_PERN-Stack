@@ -78,7 +78,7 @@ export default function AISummaryModal({
       <div className="bg-white rounded-4xl w-full max-w-2xl shadow-2xl overflow-hidden border border-slate-200 flex flex-col max-h-[85vh] animate-in zoom-in-95 duration-200">
         
         {/* Header */}
-        <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-gradient-to-r from-blue-50/50 via-white to-indigo-50/50">
+        <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-linear-to-r from-blue-50/50 via-white to-indigo-50/50">
           <div className="flex items-center gap-2.5">
             <div className="p-2 rounded-xl bg-[#0055ff] text-white shadow-xs">
               <Sparkles className="w-5 h-5" />

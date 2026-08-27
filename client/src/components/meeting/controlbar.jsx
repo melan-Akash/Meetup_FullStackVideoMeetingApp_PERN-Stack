@@ -147,8 +147,8 @@ export default function ControlBar({
           onClick={onToggleAICoPilot}
           className={`p-2.5 sm:p-3 rounded-full border transition-all cursor-pointer ${
             isAICoPilotOpen
-              ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md shadow-blue-500/25 ring-2 ring-blue-400/40'
-              : 'bg-gradient-to-r from-blue-50 to-indigo-50 hover:from-blue-100 hover:to-indigo-100 border-blue-200 text-[#0055ff]'
+              ? 'bg-linear-to-r from-blue-600 to-indigo-600 text-white shadow-md shadow-blue-500/25 ring-2 ring-blue-400/40'
+              : 'bg-linear-to-r from-blue-50 to-indigo-50 hover:from-blue-100 hover:to-indigo-100 border-blue-200 text-[#0055ff]'
           }`}
           title="Open AI Co-Pilot Assistant"
         >
