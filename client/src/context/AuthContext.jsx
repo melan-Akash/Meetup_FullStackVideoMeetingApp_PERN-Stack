@@ -36,15 +36,7 @@ export const AuthProvider = ({ children }) => {
       } catch (e) {}
       setIsLoaded(true);
     } else {
-      const defaultUser = {
-        id: "user_mock_001",
-        fullName: "Great Stack",
-        name: "Great Stack",
-        email: "user.greatstack@gmail.com",
-        plan: "PREMIUM"
-      };
-      setUser(defaultUser);
-      localStorage.setItem('meeting_guest', JSON.stringify(defaultUser));
+      setUser(null);
       setIsLoaded(true);
     }
   }, []);
@@ -133,7 +125,7 @@ export const AuthProvider = ({ children }) => {
         };
       }
     } catch (err) {
-      console.warn("Backend login offline, falling back to local guest profile:", err.message);
+      console.warn("Backend login offline, using local guest profile:", err.message);
     }
 
     localStorage.setItem('meeting_guest', JSON.stringify(profile));

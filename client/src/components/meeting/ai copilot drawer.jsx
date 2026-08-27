@@ -73,7 +73,7 @@ export default function AICoPilotDrawer({
   };
 
   return (
-    <div className="w-80 md:w-96 border-l border-slate-200/90 bg-white/95 backdrop-blur-xl h-full flex flex-col shrink-0 shadow-lg z-30 transition-all duration-300">
+    <div className="fixed inset-y-0 right-0 w-full sm:w-96 sm:relative border-l border-slate-200/90 bg-white/95 backdrop-blur-2xl h-full flex flex-col shrink-0 shadow-2xl z-50 sm:z-30 animate-in slide-in-from-right duration-200">
       
       {/* Header */}
       <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-linear-to-r from-blue-50/50 via-white to-purple-50/50">

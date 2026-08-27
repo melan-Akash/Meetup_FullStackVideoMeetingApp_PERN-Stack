@@ -74,39 +74,37 @@ export default function ControlBar({
   };
 
   return (
-    <div className="bg-white border-t border-slate-200/90 px-4 sm:px-8 py-3 flex flex-col sm:flex-row gap-3 items-center justify-between shrink-0 shadow-xs z-40 relative">
+    <div className="bg-white/95 backdrop-blur-md border-t border-slate-200/90 px-2 sm:px-6 py-2.5 flex items-center justify-between shrink-0 shadow-xs z-40 relative gap-2">
       
-      {/* Left section: ID + Copy Link + Recording Status */}
-      <div className="flex items-center gap-2.5">
-        <div className="flex items-center gap-1.5">
-          <span className="text-xs font-mono text-slate-500">
-            Id: <span className="font-semibold text-slate-700">{roomID}</span>
-          </span>
-          <button
-            onClick={handleCopyLink}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100/90 hover:bg-slate-200/80 text-slate-700 text-xs font-medium border border-slate-200/70 transition-colors cursor-pointer"
-          >
-            {copied ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5 text-slate-500" />}
-            <span>{copied ? 'Copied' : 'Copy Link'}</span>
-          </button>
-        </div>
+      {/* Left section: ID + Copy Link (Hidden on very small screens or compact) */}
+      <div className="hidden sm:flex items-center gap-2 shrink-0">
+        <span className="text-xs font-mono text-slate-500 truncate max-w-24">
+          {roomID}
+        </span>
+        <button
+          onClick={handleCopyLink}
+          className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-slate-100/90 hover:bg-slate-200 text-slate-700 text-[11px] font-medium border border-slate-200/70 transition-colors cursor-pointer"
+        >
+          {copied ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3 text-slate-500" />}
+          <span>{copied ? 'Copied' : 'Copy'}</span>
+        </button>
 
         {/* Live Recording Indicator Pill */}
         {isRecording && (
-          <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-rose-50 border border-rose-200 text-rose-600 text-xs font-bold shadow-xs animate-pulse">
+          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-rose-50 border border-rose-200 text-rose-600 text-[10px] font-bold animate-pulse">
             <span className="w-2 h-2 rounded-full bg-rose-600"></span>
             <span>REC {recordingTime}</span>
           </div>
         )}
       </div>
 
-      {/* Middle section: Action Controls */}
-      <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap justify-center">
+      {/* Middle section: Horizontally Scrollable Action Controls on Mobile */}
+      <div className="grow flex items-center justify-start sm:justify-center overflow-x-auto no-scrollbar py-1 px-1 gap-1.5 sm:gap-2">
         
         {/* Audio Toggle */}
         <button
           onClick={onToggleAudio}
-          className={`p-2.5 sm:p-3 rounded-full transition-all border cursor-pointer ${
+          className={`p-2.5 sm:p-3 rounded-2xl transition-all border cursor-pointer shrink-0 ${
             audioEnabled
               ? 'bg-slate-100 hover:bg-slate-200 border-slate-200 text-slate-700'
               : 'bg-rose-50 hover:bg-rose-100 border-rose-200 text-rose-500 shadow-xs'
@@ -119,7 +117,7 @@ export default function ControlBar({
         {/* Video Toggle */}
         <button
           onClick={onToggleVideo}
-          className={`p-2.5 sm:p-3 rounded-full transition-all border cursor-pointer ${
+          className={`p-2.5 sm:p-3 rounded-2xl transition-all border cursor-pointer shrink-0 ${
             videoEnabled
               ? 'bg-slate-100 hover:bg-slate-200 border-slate-200 text-slate-700'
               : 'bg-rose-50 hover:bg-rose-100 border-rose-200 text-rose-500 shadow-xs'
@@ -132,7 +130,7 @@ export default function ControlBar({
         {/* Screen Share Toggle */}
         <button
           onClick={onToggleScreenShare}
-          className={`p-2.5 sm:p-3 rounded-full transition-all border cursor-pointer ${
+          className={`p-2.5 sm:p-3 rounded-2xl transition-all border cursor-pointer shrink-0 ${
             isScreenSharing
               ? 'bg-[#0055ff] border-blue-600 text-white shadow-md shadow-blue-500/25 ring-2 ring-blue-400/40'
               : 'bg-slate-100 hover:bg-slate-200 border-slate-200 text-slate-700'
@@ -145,7 +143,7 @@ export default function ControlBar({
         {/* AI Co-Pilot Drawer Trigger */}
         <button
           onClick={onToggleAICoPilot}
-          className={`p-2.5 sm:p-3 rounded-full border transition-all cursor-pointer ${
+          className={`p-2.5 sm:p-3 rounded-2xl border transition-all cursor-pointer shrink-0 ${
             isAICoPilotOpen
               ? 'bg-linear-to-r from-blue-600 to-indigo-600 text-white shadow-md shadow-blue-500/25 ring-2 ring-blue-400/40'
               : 'bg-linear-to-r from-blue-50 to-indigo-50 hover:from-blue-100 hover:to-indigo-100 border-blue-200 text-[#0055ff]'
@@ -158,16 +156,16 @@ export default function ControlBar({
         {/* AI Meeting Summary Trigger */}
         <button
           onClick={onOpenAISummary}
-          className="p-2.5 sm:p-3 rounded-full bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-700 transition-all cursor-pointer"
+          className="p-2.5 sm:p-3 rounded-2xl bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-700 transition-all cursor-pointer shrink-0"
           title="Generate AI Meeting Summary & Action Items"
         >
-          <FileText className="w-4 h-4 sm:w-4.5 sm:h-4.5 text-blue-600" />
+          <FileText className="w-4 h-4 sm:w-4.5 sm:h-4.5 text-[#0055ff]" />
         </button>
 
         {/* Live Captions Toggle (CC) */}
         <button
           onClick={onToggleLiveCaptions}
-          className={`p-2.5 sm:p-3 rounded-full border transition-all cursor-pointer ${
+          className={`p-2.5 sm:p-3 rounded-2xl border transition-all cursor-pointer shrink-0 ${
             isLiveCaptionsEnabled
               ? 'bg-blue-50 border-blue-300 text-[#0055ff]'
               : 'bg-slate-100 hover:bg-slate-200 border-slate-200 text-slate-700'
@@ -180,7 +178,7 @@ export default function ControlBar({
         {/* Whiteboard Modal Trigger */}
         <button
           onClick={onOpenWhiteboard}
-          className="p-2.5 sm:p-3 rounded-full bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-700 transition-all cursor-pointer"
+          className="p-2.5 sm:p-3 rounded-2xl bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-700 transition-all cursor-pointer shrink-0"
           title="Open Collaborative Whiteboard"
         >
           <Palette className="w-4 h-4 sm:w-4.5 sm:h-4.5" />
@@ -189,7 +187,7 @@ export default function ControlBar({
         {/* Shared Notes Drawer Trigger */}
         <button
           onClick={onToggleNotes}
-          className={`p-2.5 sm:p-3 rounded-full border transition-all cursor-pointer ${
+          className={`p-2.5 sm:p-3 rounded-2xl border transition-all cursor-pointer shrink-0 ${
             isNotesOpen
               ? 'bg-blue-50 border-blue-200 text-blue-600'
               : 'bg-slate-100 hover:bg-slate-200 border-slate-200 text-slate-700'
@@ -202,7 +200,7 @@ export default function ControlBar({
         {/* Record Meeting Toggle */}
         <button
           onClick={onToggleRecording}
-          className={`p-2.5 sm:p-3 rounded-full transition-all border cursor-pointer ${
+          className={`p-2.5 sm:p-3 rounded-2xl transition-all border cursor-pointer shrink-0 ${
             isRecording
               ? 'bg-rose-600 border-rose-700 text-white shadow-md shadow-rose-500/30 animate-pulse'
               : 'bg-slate-100 hover:bg-slate-200 border-slate-200 text-slate-700'
@@ -215,7 +213,7 @@ export default function ControlBar({
         {/* Raise Hand Toggle */}
         <button
           onClick={onToggleRaiseHand}
-          className={`p-2.5 sm:p-3 rounded-full transition-all border cursor-pointer ${
+          className={`p-2.5 sm:p-3 rounded-2xl transition-all border cursor-pointer shrink-0 ${
             isHandRaised
               ? 'bg-amber-500 border-amber-600 text-white shadow-md shadow-amber-500/25 ring-2 ring-amber-300'
               : 'bg-slate-100 hover:bg-slate-200 border-slate-200 text-slate-700'
@@ -226,10 +224,10 @@ export default function ControlBar({
         </button>
 
         {/* Live Emoji Reactions Popover */}
-        <div className="relative" ref={reactionPickerRef}>
+        <div className="relative shrink-0" ref={reactionPickerRef}>
           <button
             onClick={() => setIsReactionPickerOpen(!isReactionPickerOpen)}
-            className={`p-2.5 sm:p-3 rounded-full transition-all border cursor-pointer ${
+            className={`p-2.5 sm:p-3 rounded-2xl transition-all border cursor-pointer ${
               isReactionPickerOpen
                 ? 'bg-blue-50 border-blue-200 text-blue-600'
                 : 'bg-slate-100 hover:bg-slate-200 border-slate-200 text-slate-700'
@@ -257,7 +255,7 @@ export default function ControlBar({
         {/* Settings Button */}
         <button
           onClick={onOpenSettings}
-          className="p-2.5 sm:p-3 rounded-full bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-700 transition-all cursor-pointer"
+          className="p-2.5 sm:p-3 rounded-2xl bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-700 transition-all cursor-pointer shrink-0"
           title="Audio, Video & Quality Settings"
         >
           <Settings className="w-4 h-4 sm:w-4.5 sm:h-4.5" />
@@ -266,7 +264,7 @@ export default function ControlBar({
         {/* Chat Drawer Toggle */}
         <button
           onClick={onToggleChat}
-          className={`p-2.5 sm:p-3 rounded-full border transition-all relative cursor-pointer ${
+          className={`p-2.5 sm:p-3 rounded-2xl border transition-all relative cursor-pointer shrink-0 ${
             isChatOpen
               ? 'bg-blue-50 border-blue-200 text-blue-600'
               : 'bg-slate-100 hover:bg-slate-200 border-slate-200 text-slate-700'
@@ -284,7 +282,7 @@ export default function ControlBar({
         {/* Participants Panel Toggle */}
         <button
           onClick={onToggleParticipants}
-          className={`p-2.5 sm:p-3 rounded-full border transition-all relative cursor-pointer ${
+          className={`p-2.5 sm:p-3 rounded-2xl border transition-all relative cursor-pointer shrink-0 ${
             isParticipantsOpen
               ? 'bg-blue-50 border-blue-200 text-blue-600'
               : 'bg-slate-100 hover:bg-slate-200 border-slate-200 text-slate-700'
@@ -297,20 +295,17 @@ export default function ControlBar({
           </span>
         </button>
 
-        {/* End / Leave Meeting Button */}
-        <button
-          onClick={isHost ? onEndMeeting : onLeave}
-          className="flex items-center gap-2 px-4 sm:px-5 py-2.5 bg-[#dc2626] hover:bg-red-700 text-white rounded-2xl font-bold text-xs shadow-md shadow-red-500/20 transition-all cursor-pointer ml-1 shrink-0"
-        >
-          <PhoneOff className="w-4 h-4" />
-          <span>{isHost ? 'End Meeting' : 'Leave'}</span>
-        </button>
       </div>
 
-      {/* Right section: MeetUp AI Room tag */}
-      <div className="hidden lg:flex items-center text-xs text-blue-600 font-semibold gap-1">
-        <Sparkles className="w-3.5 h-3.5" />
-        <span>MeetUp AI Pro</span>
+      {/* Right End Call Button */}
+      <div className="shrink-0">
+        <button
+          onClick={isHost ? onEndMeeting : onLeave}
+          className="flex items-center gap-1.5 px-3.5 sm:px-5 py-2.5 bg-[#dc2626] hover:bg-red-700 active:scale-95 text-white rounded-2xl font-bold text-xs shadow-md shadow-red-500/20 transition-all cursor-pointer"
+        >
+          <PhoneOff className="w-4 h-4" />
+          <span className="hidden sm:inline">{isHost ? 'End Meeting' : 'Leave'}</span>
+        </button>
       </div>
 
     </div>

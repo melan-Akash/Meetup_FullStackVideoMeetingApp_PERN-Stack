@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Loader2 } from 'lucide-react';
+import { ArrowLeft, Loader2, Sparkles, RefreshCw } from 'lucide-react';
 import { useMockAuth } from '../context/AuthContext';
 import api from '../config/api';
 import SessionCard from '../components/sessions/session card.jsx';
@@ -16,9 +16,14 @@ export default function Sessions() {
   const navigate = useNavigate();
 
   const fetchUserSessions = async () => {
-    const userID = user?.id || 'user_mock_001';
+    if (!user?.id) {
+      setSessions([]);
+      setLoading(false);
+      return;
+    }
+
     try {
-      const res = await api.get(`/meetings/user/${userID}`);
+      const res = await api.get(`/meetings/user/${user.id}`);
       if (res.data && Array.isArray(res.data)) {
         setSessions(res.data);
       } else {
@@ -51,37 +56,50 @@ export default function Sessions() {
   };
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-200 py-4 max-w-7xl mx-auto">
+    <div className="space-y-5 sm:space-y-6 animate-in fade-in duration-200 py-3 sm:py-6 px-3 sm:px-6 max-w-7xl mx-auto">
       
-      {/* Top Back to Dashboard Link */}
-      <Link 
-        to="/dashboard" 
-        className="inline-flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-900 font-medium transition-colors cursor-pointer"
-      >
-        <ArrowLeft className="w-3.5 h-3.5" />
-        <span>Go to Dashboard</span>
-      </Link>
+      {/* Top Back to Dashboard Link & Refresh */}
+      <div className="flex items-center justify-between">
+        <Link 
+          to="/dashboard" 
+          className="inline-flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-900 font-semibold transition-colors cursor-pointer"
+        >
+          <ArrowLeft className="w-3.5 h-3.5" />
+          <span>Go to Dashboard</span>
+        </Link>
+
+        <button
+          onClick={() => {
+            setLoading(true);
+            fetchUserSessions();
+          }}
+          className="p-1.5 rounded-xl hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-colors cursor-pointer"
+          title="Refresh Sessions"
+        >
+          <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin text-blue-600' : ''}`} />
+        </button>
+      </div>
 
       {/* Main Title & Subtitle */}
       <div className="space-y-1">
-        <h1 className="text-3xl sm:text-4xl font-bold text-slate-900 tracking-tight">
+        <h1 className="text-2xl sm:text-4xl font-extrabold text-slate-900 tracking-tight">
           Meeting sessions.
         </h1>
         <p className="text-xs sm:text-sm text-slate-500 font-normal">
-          Review your past and active meeting history, participant logs, and chat transcripts.
+          Review your past and active meeting history, participant logs, and AI transcripts.
         </p>
       </div>
 
       {/* Sessions Grid / Loading / Empty */}
       {loading ? (
         <div className="py-20 flex flex-col items-center justify-center text-slate-400 gap-2">
-          <Loader2 className="w-6 h-6 animate-spin text-blue-600" />
-          <p className="text-xs">Loading database sessions...</p>
+          <Loader2 className="w-6 h-6 animate-spin text-[#0055ff]" />
+          <p className="text-xs font-medium">Loading database sessions...</p>
         </div>
       ) : sessions.length === 0 ? (
         <EmptySessions />
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pt-2">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 pt-2">
           {sessions.map(session => (
             <SessionCard
               key={session.id || session.meetingID}

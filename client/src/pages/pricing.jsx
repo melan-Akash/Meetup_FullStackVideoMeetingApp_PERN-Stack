@@ -1,5 +1,6 @@
 import React from 'react';
-import { Check, Star, Zap } from 'lucide-react';
+import { Check, Star, Zap, ArrowLeft } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { useMockAuth } from '../context/AuthContext';
 import { toast } from 'react-hot-toast';
 
@@ -10,48 +11,61 @@ export default function Pricing() {
     {
       name: 'Free',
       price: '$0',
-      description: 'Ideal for trial conferences and rapid peer-to-peer connections.',
+      description: 'Ideal for rapid peer-to-peer connections and team collaborations.',
       icon: Zap,
-      color: 'text-slate-600 bg-slate-100',
+      color: 'text-blue-600 bg-blue-50',
       features: [
-        'Up to 40 minutes session limits',
-        'Maximum 4 peers concurrently',
-        'Standard SD definition presentation',
-        'Persistent text chat streams'
+        'Unlimited meeting duration',
+        'HD audio and video calls',
+        'Real-time collaborative Whiteboard',
+        'AI In-Meeting Assistant & Summary',
+        'In-Chat permanent cloud file sharing'
       ]
     },
     {
       name: 'Premium',
       price: '$19',
       period: '/month',
-      description: 'Ideal for small professional teams requiring unlimited stream duration.',
+      description: 'Built for corporate teams requiring enterprise scalability and priority support.',
       icon: Star,
       color: 'text-amber-500 bg-amber-50',
       features: [
-        'Unlimited conference meeting time',
+        'All Free features included',
         'Up to 100 peers concurrently',
-        'Ultra HD audio and video quality',
-        'Cloud messaging transcripts archived',
-        'Priority technical developer support'
+        'Priority OpenRouter AI summary speed',
+        'Advanced Cloudinary media retention',
+        '24/7 dedicated support'
       ]
     }
   ];
 
   const handleUpgrade = (plan) => {
     updatePlan(plan);
-    toast.success(`Successfully upgraded to ${plan}!`);
+    toast.success(`Successfully switched to ${plan} Plan! 🚀`);
   };
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-200 py-4">
+    <div className="space-y-6 sm:space-y-8 animate-in fade-in duration-200 py-3 sm:py-6 px-3 sm:px-6 max-w-5xl mx-auto">
+      
+      {/* Back button */}
+      <Link 
+        to="/dashboard" 
+        className="inline-flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-900 font-semibold transition-colors cursor-pointer"
+      >
+        <ArrowLeft className="w-3.5 h-3.5" />
+        <span>Back to Dashboard</span>
+      </Link>
+
       <div className="text-center max-w-xl mx-auto space-y-2">
-        <h2 className="text-3xl font-black text-slate-900 tracking-tight">Simple, Transparent Pricing</h2>
-        <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
-          Upgrade your plan dynamically to support longer, higher bandwidth corporate conferences.
+        <h2 className="text-2xl sm:text-4xl font-extrabold text-slate-900 tracking-tight">
+          Simple, Transparent Pricing.
+        </h2>
+        <p className="text-xs sm:text-sm text-slate-500 leading-relaxed font-normal">
+          Upgrade your plan dynamically to access enterprise features and higher bandwidth video conferencing.
         </p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-3xl mx-auto pt-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-5 sm:gap-8 max-w-3xl mx-auto pt-2">
         {tiers.map((tier) => {
           const Icon = tier.icon;
           const isActive = user?.plan?.toLowerCase() === tier.name.toLowerCase();
@@ -59,8 +73,10 @@ export default function Pricing() {
           return (
             <div 
               key={tier.name}
-              className={`glass-card rounded-4xl p-8 flex flex-col justify-between shadow-lg relative overflow-hidden transition-all duration-200 ${
-                isActive ? 'ring-2 ring-blue-600 shadow-xl' : 'hover:bg-white/80'
+              className={`bg-white/85 backdrop-blur-2xl rounded-3xl sm:rounded-4xl p-6 sm:p-8 flex flex-col justify-between shadow-sm border transition-all duration-200 ${
+                isActive 
+                  ? 'ring-2 ring-[#0055ff] border-blue-300 shadow-lg shadow-blue-500/10' 
+                  : 'border-slate-200/90 hover:border-slate-300 hover:shadow-md'
               }`}
             >
               <div>
@@ -71,14 +87,14 @@ export default function Pricing() {
                   </div>
                 </div>
 
-                <div className="mb-4">
-                  <span className="text-4xl font-black text-slate-900">{tier.price}</span>
+                <div className="mb-3">
+                  <span className="text-3xl sm:text-4xl font-extrabold text-slate-900">{tier.price}</span>
                   {tier.period && <span className="text-xs text-slate-500 font-semibold ml-1">{tier.period}</span>}
                 </div>
 
                 <p className="text-xs text-slate-600 mb-6 leading-relaxed">{tier.description}</p>
 
-                <ul className="space-y-3.5 mb-8">
+                <ul className="space-y-3 mb-8">
                   {tier.features.map((f, i) => (
                     <li key={i} className="flex items-start gap-2.5 text-xs text-slate-700 font-medium">
                       <Check className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
@@ -91,13 +107,13 @@ export default function Pricing() {
               <button
                 onClick={() => handleUpgrade(tier.name)}
                 disabled={isActive}
-                className={`w-full py-3 rounded-full text-xs font-bold transition-all cursor-pointer ${
+                className={`w-full py-3 rounded-2xl text-xs font-bold transition-all cursor-pointer ${
                   isActive
                     ? 'bg-blue-50 text-blue-600 border border-blue-200 cursor-default'
-                    : 'bg-slate-900 hover:bg-slate-800 text-white shadow-md shadow-slate-900/10'
+                    : 'bg-[#0055ff] hover:bg-blue-700 text-white shadow-md shadow-blue-500/20'
                 }`}
               >
-                {isActive ? 'Current Plan' : `Upgrade to ${tier.name}`}
+                {isActive ? 'Current Active Plan' : `Switch to ${tier.name}`}
               </button>
             </div>
           );
